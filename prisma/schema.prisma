@@ -21,14 +21,18 @@ model Expense {
 }
 
 model Sale {
-  id         Int      @id @default(autoincrement())
-  name       String   @db.VarChar(255)
-  unitValue  Decimal  @db.Decimal(10, 2)
-  quantity   Int
-  totalValue Decimal  @db.Decimal(10, 2)
-  date       DateTime @db.Date
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               Int      @id @default(autoincrement())
+  name             String   @db.VarChar(255)
+  unitValue        Decimal  @db.Decimal(10, 2)
+  quantity         Int
+  grossValue       Decimal  @default(0) @db.Decimal(10, 2)
+  discountValue    Decimal  @default(0) @db.Decimal(10, 2)
+  platformFeeValue Decimal  @default(0) @db.Decimal(10, 2)
+  totalValue       Decimal  @db.Decimal(10, 2)
+  platform         String   @default("PERSONAL") @db.VarChar(20)
+  date             DateTime @db.Date
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@map("sales")
 }

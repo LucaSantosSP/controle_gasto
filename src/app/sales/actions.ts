@@ -21,7 +21,11 @@ export async function createSale(_: ActionState, formData: FormData): Promise<Ac
         name: parsed.data.name,
         unitValue,
         quantity: parsed.data.quantity,
+        grossValue: unitValue.mul(parsed.data.quantity),
+        discountValue: new Prisma.Decimal(0),
+        platformFeeValue: new Prisma.Decimal(0),
         totalValue: unitValue.mul(parsed.data.quantity),
+        platform: "PERSONAL",
         date: new Date(`${parsed.data.date}T00:00:00.000Z`),
       },
     });
@@ -55,7 +59,11 @@ export async function updateSale(_: ActionState, formData: FormData): Promise<Ac
         name: parsed.data.name,
         unitValue,
         quantity: parsed.data.quantity,
+        grossValue: unitValue.mul(parsed.data.quantity),
+        discountValue: new Prisma.Decimal(0),
+        platformFeeValue: new Prisma.Decimal(0),
         totalValue: unitValue.mul(parsed.data.quantity),
+        platform: "PERSONAL",
         date: new Date(`${parsed.data.date}T00:00:00.000Z`),
       },
     });

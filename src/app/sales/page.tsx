@@ -17,7 +17,11 @@ export default async function SalesPage() {
         name: sale.name,
         unitValue: sale.unitValue.toString(),
         quantity: sale.quantity,
+        grossValue: sale.grossValue.toString(),
+        discountValue: sale.discountValue.toString(),
+        platformFeeValue: sale.platformFeeValue.toString(),
         totalValue: sale.totalValue.toString(),
+        platform: sale.platform,
         date: sale.date.toISOString(),
       }))}
       createAction={createSale}

@@ -36,6 +36,25 @@ export const productSchema = z.object({
     .url("Informe uma URL válida para a foto."),
 });
 
+export const sellProductSchema = z.object({
+  productId: z.coerce.number({ error: "Produto inválido." }).int().positive("Produto inválido."),
+  quantity: z.coerce
+    .number({ error: "Informe a quantidade vendida." })
+    .int("A quantidade vendida deve ser um número inteiro.")
+    .positive("A quantidade vendida deve ser maior que zero."),
+  platform: z.enum(["PERSONAL", "SHOPEE"], { error: "Informe a plataforma." }),
+  discountType: z.enum(["NONE", "FIXED", "PERCENT"], { error: "Informe o tipo de desconto." }),
+  discountValue: z.union([moneyText("o desconto"), z.literal("")]).optional(),
+  finalValue: z.union([moneyText("o valor final"), z.literal("")]).optional(),
+  date: z
+    .string({ error: "Informe a data." })
+    .trim()
+    .min(1, "Informe a data.")
+    .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)), {
+      message: "Informe uma data válida.",
+    }),
+});
+
 export const transactionSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome."),
   unitValue: decimalText,
@@ -59,6 +78,7 @@ export const periodSchema = z.object({
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
 export type ProductInput = z.infer<typeof productSchema>;
+export type SellProductInput = z.infer<typeof sellProductSchema>;
 
 export function parseFormData(formData: FormData) {
   return transactionSchema.safeParse({
@@ -77,6 +97,18 @@ export function parseProductFormData(formData: FormData) {
     manufacturingValue: formData.get("manufacturingValue"),
     saleValue: formData.get("saleValue"),
     photoUrl: formData.get("photoUrl"),
+  });
+}
+
+export function parseSellProductFormData(formData: FormData) {
+  return sellProductSchema.safeParse({
+    productId: formData.get("productId"),
+    quantity: formData.get("quantity"),
+    platform: formData.get("platform"),
+    discountType: formData.get("discountType"),
+    discountValue: formData.get("discountValue") || "",
+    finalValue: formData.get("finalValue") || "",
+    date: formData.get("date"),
   });
 }
 

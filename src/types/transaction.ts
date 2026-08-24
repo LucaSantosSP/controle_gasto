@@ -5,7 +5,11 @@ export type TransactionRow = {
   name: string;
   unitValue: string;
   quantity: number;
+  grossValue?: string;
+  discountValue?: string;
+  platformFeeValue?: string;
   totalValue: string;
+  platform?: string;
   date: string;
 };
 

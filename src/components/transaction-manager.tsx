@@ -65,6 +65,7 @@ export function TransactionManager({
                 <th className="px-5 py-3">Nome</th>
                 <th className="px-5 py-3">Valor Unitário</th>
                 <th className="px-5 py-3">Quantidade</th>
+                {title === "Vendas" ? <th className="px-5 py-3">Plataforma</th> : null}
                 <th className="px-5 py-3">Valor Total</th>
                 <th className="px-5 py-3">Data</th>
                 <th className="px-5 py-3">Ações</th>
@@ -73,7 +74,7 @@ export function TransactionManager({
             <tbody className="divide-y divide-slate-100">
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={title === "Vendas" ? 7 : 6} className="px-5 py-8 text-center text-slate-500">
                     {emptyLabel}
                   </td>
                 </tr>
@@ -83,6 +84,7 @@ export function TransactionManager({
                     <td className="px-5 py-4 font-medium text-slate-950">{record.name}</td>
                     <td className="px-5 py-4 text-slate-700">{formatCurrency(record.unitValue)}</td>
                     <td className="px-5 py-4 text-slate-700">{record.quantity}</td>
+                    {title === "Vendas" ? <td className="px-5 py-4 text-slate-700">{formatPlatform(record.platform)}</td> : null}
                     <td className="px-5 py-4 font-semibold text-slate-950">{formatCurrency(record.totalValue)}</td>
                     <td className="px-5 py-4 text-slate-700">{formatDate(record.date)}</td>
                     <td className="px-5 py-4">
@@ -226,6 +228,14 @@ function normalizeMoneyText(value: string) {
   }
 
   return value;
+}
+
+function formatPlatform(platform?: string) {
+  if (platform === "SHOPEE") {
+    return "Shopee";
+  }
+
+  return "Pessoalmente";
 }
 
 function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {

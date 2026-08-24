@@ -117,7 +117,11 @@ Campos principais das duas tabelas:
 - `name`
 - `unitValue` como `DECIMAL(10,2)`
 - `quantity`
+- `grossValue` como `DECIMAL(10,2)`
+- `discountValue` como `DECIMAL(10,2)`
+- `platformFeeValue` como `DECIMAL(10,2)`
 - `totalValue` como `DECIMAL(10,2)`
+- `platform`
 - `date`
 - `createdAt`
 - `updatedAt`
@@ -147,6 +151,8 @@ Campos principais da tabela `products`:
 - Cadastro, edição e exclusão de vendas.
 - Cadastro, edição e exclusão de gastos.
 - Cadastro, edição, duplicação, exclusão e listagem de produtos em estoque com foto por URL, valor de fabricação e valor de venda.
+- Lançamento de venda diretamente pelo estoque com quantidade vendida, desconto, valor final manual e plataforma.
+- Cálculo automático de taxas Shopee para vendas marcadas como `Vendido na Shopee`.
 - Cálculo do total em tempo real nos formulários.
 - Validações no servidor com Zod.
 - Formatação brasileira de moeda e data.
