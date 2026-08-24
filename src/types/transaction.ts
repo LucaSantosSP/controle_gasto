@@ -15,6 +15,15 @@ export type ActionState = {
   errors?: Record<string, string[]>;
 };
 
+export type ProductRow = {
+  id: number;
+  name: string;
+  quantity: number;
+  manufacturingValue: string;
+  saleValue: string;
+  photoUrl: string;
+};
+
 export const initialActionState: ActionState = {
   ok: false,
   message: "",

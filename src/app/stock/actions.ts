@@ -30,3 +30,81 @@ export async function createProduct(_: ActionState, formData: FormData): Promise
     return { ok: false, message: "Não foi possível cadastrar o produto." };
   }
 }
+
+export async function updateProduct(_: ActionState, formData: FormData): Promise<ActionState> {
+  const id = Number(formData.get("id"));
+  const parsed = parseProductFormData(formData);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return { ok: false, message: "Produto inválido." };
+  }
+
+  if (!parsed.success) {
+    return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
+  }
+
+  try {
+    await prisma.product.update({
+      where: { id },
+      data: {
+        name: parsed.data.name,
+        quantity: parsed.data.quantity,
+        manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
+        saleValue: new Prisma.Decimal(parsed.data.saleValue),
+        photoUrl: parsed.data.photoUrl,
+      },
+    });
+
+    revalidatePath("/stock");
+    return { ok: true, message: "Produto atualizado com sucesso." };
+  } catch {
+    return { ok: false, message: "Não foi possível atualizar o produto." };
+  }
+}
+
+export async function deleteProduct(_: ActionState, formData: FormData): Promise<ActionState> {
+  const id = Number(formData.get("id"));
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return { ok: false, message: "Produto inválido." };
+  }
+
+  try {
+    await prisma.product.delete({ where: { id } });
+    revalidatePath("/stock");
+    return { ok: true, message: "Produto excluído com sucesso." };
+  } catch {
+    return { ok: false, message: "Não foi possível excluir o produto." };
+  }
+}
+
+export async function duplicateProduct(_: ActionState, formData: FormData): Promise<ActionState> {
+  const id = Number(formData.get("id"));
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return { ok: false, message: "Produto inválido." };
+  }
+
+  try {
+    const product = await prisma.product.findUnique({ where: { id } });
+
+    if (!product) {
+      return { ok: false, message: "Produto não encontrado." };
+    }
+
+    await prisma.product.create({
+      data: {
+        name: `${product.name} (cópia)`,
+        quantity: product.quantity,
+        manufacturingValue: product.manufacturingValue,
+        saleValue: product.saleValue,
+        photoUrl: product.photoUrl,
+      },
+    });
+
+    revalidatePath("/stock");
+    return { ok: true, message: "Produto duplicado com sucesso." };
+  } catch {
+    return { ok: false, message: "Não foi possível duplicar o produto." };
+  }
+}

@@ -145,7 +145,7 @@ Campos principais da tabela `products`:
 - Listagem de vendas e gastos recentes no dashboard.
 - Cadastro, edição e exclusão de vendas.
 - Cadastro, edição e exclusão de gastos.
-- Cadastro e listagem de produtos em estoque com foto por URL, valor de fabricação e valor de venda.
+- Cadastro, edição, duplicação, exclusão e listagem de produtos em estoque com foto por URL, valor de fabricação e valor de venda.
 - Cálculo do total em tempo real nos formulários.
 - Validações no servidor com Zod.
 - Formatação brasileira de moeda e data.
