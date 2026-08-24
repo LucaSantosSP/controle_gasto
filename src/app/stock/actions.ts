@@ -16,6 +16,7 @@ export async function createProduct(_: ActionState, formData: FormData): Promise
   try {
     await prisma.product.create({
       data: {
+        sku: parsed.data.sku,
         name: parsed.data.name,
         quantity: parsed.data.quantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
@@ -26,7 +27,11 @@ export async function createProduct(_: ActionState, formData: FormData): Promise
 
     revalidatePath("/stock");
     return { ok: true, message: "Produto cadastrado com sucesso." };
-  } catch {
+  } catch (error) {
+    if (isDuplicateSkuError(error)) {
+      return { ok: false, message: "Já existe um produto com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
+    }
+
     return { ok: false, message: "Não foi possível cadastrar o produto." };
   }
 }
@@ -47,6 +52,7 @@ export async function updateProduct(_: ActionState, formData: FormData): Promise
     await prisma.product.update({
       where: { id },
       data: {
+        sku: parsed.data.sku,
         name: parsed.data.name,
         quantity: parsed.data.quantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
@@ -57,7 +63,11 @@ export async function updateProduct(_: ActionState, formData: FormData): Promise
 
     revalidatePath("/stock");
     return { ok: true, message: "Produto atualizado com sucesso." };
-  } catch {
+  } catch (error) {
+    if (isDuplicateSkuError(error)) {
+      return { ok: false, message: "Já existe um produto com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
+    }
+
     return { ok: false, message: "Não foi possível atualizar o produto." };
   }
 }
@@ -94,6 +104,7 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
 
     await prisma.product.create({
       data: {
+        sku: await createDuplicateSku(product.sku),
         name: `${product.name} (cópia)`,
         quantity: product.quantity,
         manufacturingValue: product.manufacturingValue,
@@ -107,4 +118,21 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
   } catch {
     return { ok: false, message: "Não foi possível duplicar o produto." };
   }
+}
+
+function isDuplicateSkuError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+async function createDuplicateSku(sku: string) {
+  const baseSku = `${sku.slice(0, 85)}-COPIA`;
+  let candidate = baseSku;
+  let suffix = 2;
+
+  while (await prisma.product.findUnique({ where: { sku: candidate } })) {
+    candidate = `${baseSku}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
 }

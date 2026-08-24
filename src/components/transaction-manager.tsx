@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { formatCurrency, formatDate, toInputDate } from "@/lib/format";
+import { formatCurrency, formatDate, toInputDate, toMoneyInput } from "@/lib/format";
 import { initialActionState, type ActionState, type TransactionRow } from "@/types/transaction";
 
 type ServerAction = (state: ActionState, formData: FormData) => Promise<ActionState>;
@@ -120,11 +120,11 @@ function TransactionForm({
   onSaved: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, initialActionState);
-  const [unitValue, setUnitValue] = useState(record?.unitValue ?? "");
+  const [unitValue, setUnitValue] = useState(record ? toMoneyInput(record.unitValue) : "");
   const [quantity, setQuantity] = useState(record?.quantity.toString() ?? "1");
 
   const total = useMemo(() => {
-    const normalizedUnit = Number(unitValue.replace(/\./g, "").replace(",", "."));
+    const normalizedUnit = Number(normalizeMoneyText(unitValue));
     const parsedQuantity = Number(quantity);
 
     if (Number.isNaN(normalizedUnit) || Number.isNaN(parsedQuantity)) {
@@ -212,6 +212,20 @@ function TransactionForm({
       </form>
     </section>
   );
+}
+
+function normalizeMoneyText(value: string) {
+  if (value.includes(",")) {
+    return value.replace(/\./g, "").replace(",", ".");
+  }
+
+  const parts = value.split(".");
+
+  if (parts.length > 1 && parts.at(-1)?.length === 3) {
+    return parts.join("");
+  }
+
+  return value;
 }
 
 function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {

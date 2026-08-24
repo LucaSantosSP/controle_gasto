@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { createProduct, deleteProduct, duplicateProduct, updateProduct } from "@/app/stock/actions";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, toMoneyInput } from "@/lib/format";
 import { initialActionState, type ActionState, type ProductRow } from "@/types/transaction";
 
 type ServerAction = (state: ActionState, formData: FormData) => Promise<ActionState>;
@@ -48,6 +48,7 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                 <div className="space-y-4 p-5">
                   <div>
                     <h3 className="text-lg font-semibold text-slate-950">{product.name}</h3>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">SKU: {product.sku}</p>
                     <p className="text-sm text-slate-500">Quantidade: {product.quantity}</p>
                   </div>
                   <div className="grid gap-2 text-sm sm:grid-cols-2">
@@ -93,7 +94,17 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <form action={formAction} className="space-y-5">
         {product ? <input type="hidden" name="id" value={product.id} /> : null}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Field label="SKU" error={state.errors?.sku?.[0]}>
+            <input
+              name="sku"
+              required
+              maxLength={100}
+              defaultValue={product?.sku ?? ""}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+              placeholder="Ex.: VASO-RECIFE-001"
+            />
+          </Field>
           <Field label="Nome" error={state.errors?.name?.[0]}>
             <input
               name="name"
@@ -120,7 +131,7 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               name="manufacturingValue"
               required
               inputMode="decimal"
-              defaultValue={product?.manufacturingValue ?? ""}
+              defaultValue={product ? toMoneyInput(product.manufacturingValue) : ""}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="15,00"
             />
@@ -130,7 +141,7 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               name="saleValue"
               required
               inputMode="decimal"
-              defaultValue={product?.saleValue ?? ""}
+              defaultValue={product ? toMoneyInput(product.saleValue) : ""}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="28,90"
             />

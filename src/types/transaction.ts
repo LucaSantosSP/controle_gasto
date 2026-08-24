@@ -17,6 +17,7 @@ export type ActionState = {
 
 export type ProductRow = {
   id: number;
+  sku: string;
   name: string;
   quantity: number;
   manufacturingValue: string;

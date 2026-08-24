@@ -10,6 +10,7 @@ export default async function StockPage() {
     <StockManager
       products={products.map((product) => ({
         id: product.id,
+        sku: product.sku,
         name: product.name,
         quantity: product.quantity,
         manufacturingValue: product.manufacturingValue.toString(),

@@ -12,3 +12,7 @@ export function formatDate(date: Date | string) {
 export function toInputDate(date: Date | string) {
   return new Date(date).toISOString().slice(0, 10);
 }
+
+export function toMoneyInput(value: number | string) {
+  return Number(value).toFixed(2).replace(".", ",");
+}

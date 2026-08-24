@@ -113,6 +113,7 @@ O sistema usa três tabelas:
 Campos principais das duas tabelas:
 
 - `id`
+- `sku`, único
 - `name`
 - `unitValue` como `DECIMAL(10,2)`
 - `quantity`

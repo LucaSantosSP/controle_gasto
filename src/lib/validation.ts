@@ -5,7 +5,7 @@ const moneyText = (fieldLabel: string) =>
     .string({ error: `Informe ${fieldLabel}.` })
     .trim()
     .min(1, `Informe ${fieldLabel}.`)
-    .transform((value) => value.replace(/\./g, "").replace(",", "."))
+    .transform(normalizeMoneyText)
     .pipe(
       z
         .string()
@@ -17,6 +17,11 @@ const moneyText = (fieldLabel: string) =>
 const decimalText = moneyText("o valor unitário");
 
 export const productSchema = z.object({
+  sku: z
+    .string({ error: "Informe o SKU." })
+    .trim()
+    .min(1, "Informe o SKU.")
+    .max(100, "O SKU deve ter no máximo 100 caracteres."),
   name: z.string().trim().min(1, "Informe o nome."),
   quantity: z.coerce
     .number({ error: "Informe a quantidade." })
@@ -66,6 +71,7 @@ export function parseFormData(formData: FormData) {
 
 export function parseProductFormData(formData: FormData) {
   return productSchema.safeParse({
+    sku: formData.get("sku"),
     name: formData.get("name"),
     quantity: formData.get("quantity"),
     manufacturingValue: formData.get("manufacturingValue"),
@@ -88,4 +94,20 @@ export function parsePeriod(searchParams: Record<string, string | string[] | und
 
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function normalizeMoneyText(value: string) {
+  const trimmed = value.trim();
+
+  if (trimmed.includes(",")) {
+    return trimmed.replace(/\./g, "").replace(",", ".");
+  }
+
+  const parts = trimmed.split(".");
+
+  if (parts.length > 1 && parts.at(-1)?.length === 3) {
+    return parts.join("");
+  }
+
+  return trimmed;
 }
