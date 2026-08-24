@@ -104,10 +104,11 @@ npm run build
 
 ## Modelo do banco
 
-O sistema usa duas tabelas:
+O sistema usa três tabelas:
 
 - `sales`: vendas cadastradas.
 - `expenses`: gastos cadastrados.
+- `products`: produtos em estoque.
 
 Campos principais das duas tabelas:
 
@@ -126,6 +127,17 @@ O `totalValue` sempre é calculado no servidor como:
 unitValue * quantity
 ```
 
+Campos principais da tabela `products`:
+
+- `id`
+- `name`
+- `quantity`
+- `manufacturingValue` como `DECIMAL(10,2)`
+- `saleValue` como `DECIMAL(10,2)`
+- `photoUrl`
+- `createdAt`
+- `updatedAt`
+
 ## Funcionalidades
 
 - Dashboard com total de vendas, total de gastos e lucro.
@@ -133,6 +145,7 @@ unitValue * quantity
 - Listagem de vendas e gastos recentes no dashboard.
 - Cadastro, edição e exclusão de vendas.
 - Cadastro, edição e exclusão de gastos.
+- Cadastro e listagem de produtos em estoque com foto por URL, valor de fabricação e valor de venda.
 - Cálculo do total em tempo real nos formulários.
 - Validações no servidor com Zod.
 - Formatação brasileira de moeda e data.

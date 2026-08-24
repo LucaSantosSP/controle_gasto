@@ -32,3 +32,16 @@ model Sale {
 
   @@map("sales")
 }
+
+model Product {
+  id                 Int      @id @default(autoincrement())
+  name               String   @db.VarChar(255)
+  quantity           Int
+  manufacturingValue Decimal  @default(0) @db.Decimal(10, 2)
+  saleValue          Decimal  @db.Decimal(10, 2)
+  photoUrl           String   @db.VarChar(2048)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("products")
+}

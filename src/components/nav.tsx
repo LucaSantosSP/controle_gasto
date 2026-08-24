@@ -4,6 +4,7 @@ const links = [
   { href: "/", label: "Dashboard" },
   { href: "/sales", label: "Vendas" },
   { href: "/expenses", label: "Gastos" },
+  { href: "/stock", label: "Estoque" },
 ];
 
 export function Nav() {
