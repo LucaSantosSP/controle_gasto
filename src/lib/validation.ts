@@ -30,10 +30,11 @@ export const productSchema = z.object({
   manufacturingValue: moneyText("o valor de fabricação"),
   saleValue: moneyText("o valor de venda"),
   photoUrl: z
-    .string({ error: "Informe a URL da foto." })
+    .string({ error: "Informe uma URL válida para a foto." })
     .trim()
-    .min(1, "Informe a URL da foto.")
-    .url("Informe uma URL válida para a foto."),
+    .refine((value) => value === "" || z.string().url().safeParse(value).success, {
+      message: "Informe uma URL válida para a foto.",
+    }),
 });
 
 export const sellProductSchema = z.object({

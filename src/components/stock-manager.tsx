@@ -43,9 +43,34 @@ export function StockManager({ products }: { products: ProductRow[] }) {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((product) => (
               <article key={product.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="aspect-[4/3] bg-slate-100">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={product.photoUrl} alt={product.name} className="h-full w-full object-cover" />
+                <div className="relative aspect-[4/3] bg-slate-100">
+                  {product.quantity <= 0 ? (
+                    <div className="absolute left-3 top-3 z-10 rounded-full bg-red-600 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
+                      Sem estoque
+                    </div>
+                  ) : null}
+                  {product.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={product.photoUrl} alt={product.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-slate-400">
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-16 w-16"
+                      >
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                        <path d="m3.3 7 8.7 5 8.7-5" />
+                        <path d="M12 22V12" />
+                      </svg>
+                      <span className="text-sm font-semibold">Sem imagem</span>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-4 p-5">
                   <div>
@@ -290,10 +315,9 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               placeholder="28,90"
             />
           </Field>
-          <Field label="URL da foto" error={state.errors?.photoUrl?.[0]}>
+          <Field label="URL da foto (opcional)" error={state.errors?.photoUrl?.[0]}>
             <input
               name="photoUrl"
-              required
               type="url"
               defaultValue={product?.photoUrl ?? ""}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"

@@ -151,6 +151,8 @@ Campos principais da tabela `products`:
 - Cadastro, edição e exclusão de vendas.
 - Cadastro, edição e exclusão de gastos.
 - Cadastro, edição, duplicação, exclusão e listagem de produtos em estoque com foto por URL, valor de fabricação e valor de venda.
+- URL de foto opcional no estoque, com ícone padrão quando não houver imagem.
+- Alerta visual em produtos sem estoque.
 - Lançamento de venda diretamente pelo estoque com quantidade vendida, desconto, valor final manual e plataforma.
 - Cálculo automático de taxas Shopee para vendas marcadas como `Vendido na Shopee`.
 - Cálculo do total em tempo real nos formulários.

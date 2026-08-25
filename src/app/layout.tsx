@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description: "Controle local de gastos, vendas e lucro.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
