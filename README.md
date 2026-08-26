@@ -1,6 +1,6 @@
-# Controle da Loja
+# Fluxo
 
-Sistema web local para controle simples de vendas, gastos e lucro de uma pequena loja.
+Sistema web local para fluxo simples de vendas, gastos, estoque e lucro de uma pequena loja.
 
 ## Tecnologias
 

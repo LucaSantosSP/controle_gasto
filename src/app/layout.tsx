@@ -3,8 +3,11 @@ import "./globals.css";
 import { Nav } from "@/components/nav";
 
 export const metadata: Metadata = {
-  title: "Controle da Loja",
-  description: "Controle local de gastos, vendas e lucro.",
+  title: "Fluxo",
+  description: "Fluxo local de gastos, vendas, estoque e lucro.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export const dynamic = "force-dynamic";
