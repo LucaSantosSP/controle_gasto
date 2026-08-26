@@ -76,7 +76,8 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                   <div>
                     <h3 className="text-lg font-semibold text-slate-950">{product.name}</h3>
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">SKU: {product.sku}</p>
-                    <p className="text-sm text-slate-500">Quantidade: {product.quantity}</p>
+                    <p className="text-sm text-slate-500">Estoque: {product.quantity}</p>
+                    <p className="text-sm text-slate-500">Vendidos: {product.soldQuantity}</p>
                   </div>
                   <div className="grid gap-2 text-sm sm:grid-cols-2">
                     <p className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">
@@ -89,7 +90,10 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setEditing(product)}
+                      onClick={() => {
+                        setEditing(product);
+                        scrollToTop();
+                      }}
                       className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                     >
                       Editar
@@ -295,6 +299,18 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               placeholder="10"
             />
           </Field>
+          <Field label="Quantidade vendida" error={state.errors?.soldQuantity?.[0]}>
+            <input
+              name="soldQuantity"
+              required
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={product?.soldQuantity ?? 0}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+              placeholder="0"
+            />
+          </Field>
           <Field label="Valor de fabricação" error={state.errors?.manufacturingValue?.[0]}>
             <input
               name="manufacturingValue"
@@ -421,4 +437,8 @@ function Field({ label, error, children }: { label: string; error?: string; chil
       {error ? <span className="block text-xs font-semibold text-red-700">{error}</span> : null}
     </label>
   );
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }

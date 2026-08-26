@@ -24,6 +24,7 @@ export type ProductRow = {
   sku: string;
   name: string;
   quantity: number;
+  soldQuantity: number;
   manufacturingValue: string;
   saleValue: string;
   photoUrl: string;

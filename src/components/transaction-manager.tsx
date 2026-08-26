@@ -91,7 +91,10 @@ export function TransactionManager({
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => setEditing(record)}
+                          onClick={() => {
+                            setEditing(record);
+                            scrollToTop();
+                          }}
                           className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
                           Editar
@@ -236,6 +239,10 @@ function formatPlatform(platform?: string) {
   }
 
   return "Pessoalmente";
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {

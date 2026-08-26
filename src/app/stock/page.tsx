@@ -13,6 +13,7 @@ export default async function StockPage() {
         sku: product.sku,
         name: product.name,
         quantity: product.quantity,
+        soldQuantity: product.soldQuantity,
         manufacturingValue: product.manufacturingValue.toString(),
         saleValue: product.saleValue.toString(),
         photoUrl: product.photoUrl,

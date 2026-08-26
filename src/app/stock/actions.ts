@@ -20,6 +20,7 @@ export async function createProduct(_: ActionState, formData: FormData): Promise
         sku: parsed.data.sku,
         name: parsed.data.name,
         quantity: parsed.data.quantity,
+        soldQuantity: parsed.data.soldQuantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
         saleValue: new Prisma.Decimal(parsed.data.saleValue),
         photoUrl: parsed.data.photoUrl,
@@ -56,6 +57,7 @@ export async function updateProduct(_: ActionState, formData: FormData): Promise
         sku: parsed.data.sku,
         name: parsed.data.name,
         quantity: parsed.data.quantity,
+        soldQuantity: parsed.data.soldQuantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
         saleValue: new Prisma.Decimal(parsed.data.saleValue),
         photoUrl: parsed.data.photoUrl,
@@ -108,6 +110,7 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
         sku: await createDuplicateSku(product.sku),
         name: `${product.name} (cópia)`,
         quantity: product.quantity,
+        soldQuantity: product.soldQuantity,
         manufacturingValue: product.manufacturingValue,
         saleValue: product.saleValue,
         photoUrl: product.photoUrl,
@@ -166,7 +169,10 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
       }),
       prisma.product.update({
         where: { id: product.id },
-        data: { quantity: { decrement: parsed.data.quantity } },
+        data: {
+          quantity: { decrement: parsed.data.quantity },
+          soldQuantity: { increment: parsed.data.quantity },
+        },
       }),
     ]);
 

@@ -42,6 +42,7 @@ model Product {
   sku                String   @unique @db.VarChar(100)
   name               String   @db.VarChar(255)
   quantity           Int
+  soldQuantity       Int      @default(0)
   manufacturingValue Decimal  @default(0) @db.Decimal(10, 2)
   saleValue          Decimal  @db.Decimal(10, 2)
   photoUrl           String   @db.VarChar(2048)

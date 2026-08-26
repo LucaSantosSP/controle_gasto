@@ -27,6 +27,10 @@ export const productSchema = z.object({
     .number({ error: "Informe a quantidade." })
     .int("A quantidade deve ser um número inteiro.")
     .min(0, "A quantidade deve ser maior ou igual a zero."),
+  soldQuantity: z.coerce
+    .number({ error: "Informe a quantidade vendida." })
+    .int("A quantidade vendida deve ser um número inteiro.")
+    .min(0, "A quantidade vendida deve ser maior ou igual a zero."),
   manufacturingValue: moneyText("o valor de fabricação"),
   saleValue: moneyText("o valor de venda"),
   photoUrl: z
@@ -95,6 +99,7 @@ export function parseProductFormData(formData: FormData) {
     sku: formData.get("sku"),
     name: formData.get("name"),
     quantity: formData.get("quantity"),
+    soldQuantity: formData.get("soldQuantity"),
     manufacturingValue: formData.get("manufacturingValue"),
     saleValue: formData.get("saleValue"),
     photoUrl: formData.get("photoUrl"),
