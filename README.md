@@ -152,6 +152,7 @@ Campos principais da tabela `products`:
 - Cadastro, edição e exclusão de vendas.
 - Cadastro, edição e exclusão de gastos.
 - Cadastro, edição, duplicação, exclusão e listagem de produtos em estoque com foto por URL, valor de fabricação e valor de venda.
+- Filtro de produtos por nome ou SKU na tela de estoque.
 - Controle de quantidade vendida por produto, editável manualmente e atualizado ao lançar venda pelo estoque.
 - URL de foto opcional no estoque, com ícone padrão quando não houver imagem.
 - Alerta visual em produtos sem estoque.

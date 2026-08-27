@@ -12,6 +12,16 @@ type ServerAction = (state: ActionState, formData: FormData) => Promise<ActionSt
 export function StockManager({ products }: { products: ProductRow[] }) {
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [selling, setSelling] = useState<ProductRow | null>(null);
+  const [search, setSearch] = useState("");
+  const filteredProducts = products.filter((product) => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    return product.name.toLowerCase().includes(normalizedSearch) || product.sku.toLowerCase().includes(normalizedSearch);
+  });
 
   return (
     <div className="space-y-8">
@@ -34,14 +44,35 @@ export function StockManager({ products }: { products: ProductRow[] }) {
       <ProductForm key={editing ? `edit-${editing.id}` : "create"} product={editing} onSaved={() => setEditing(null)} />
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-slate-950">Produtos cadastrados</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">Produtos cadastrados</h2>
+            <p className="text-sm text-slate-500">
+              {filteredProducts.length} de {products.length} produto(s) exibido(s)
+            </p>
+          </div>
+          <label className="w-full space-y-2 text-sm font-medium text-slate-700 sm:max-w-sm">
+            <span>Pesquisar produto</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+              placeholder="Buscar por nome ou SKU"
+            />
+          </label>
+        </div>
         {products.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-sm text-slate-500 shadow-sm">
             Nenhum produto cadastrado.
           </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-sm text-slate-500 shadow-sm">
+            Nenhum produto encontrado para a pesquisa informada.
+          </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {products.map((product) => (
+            {filteredProducts.map((product) => (
               <article key={product.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="relative aspect-[4/3] bg-slate-100">
                   {product.quantity <= 0 ? (
