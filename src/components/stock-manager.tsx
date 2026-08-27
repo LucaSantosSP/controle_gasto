@@ -256,6 +256,13 @@ function SellProductModal({ product, onClose }: { product: ProductRow; onClose: 
 function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved: () => void }) {
   const action = product ? updateProduct : createProduct;
   const [state, formAction, pending] = useActionState(action, initialActionState);
+  const [sku, setSku] = useState(product?.sku ?? "");
+  const [name, setName] = useState(product?.name ?? "");
+  const [quantity, setQuantity] = useState(product?.quantity.toString() ?? "");
+  const [soldQuantity, setSoldQuantity] = useState(product?.soldQuantity.toString() ?? "0");
+  const [manufacturingValue, setManufacturingValue] = useState(product ? toMoneyInput(product.manufacturingValue) : "");
+  const [saleValue, setSaleValue] = useState(product ? toMoneyInput(product.saleValue) : "");
+  const [photoUrl, setPhotoUrl] = useState(product?.photoUrl ?? "");
 
   useEffect(() => {
     if (state.ok && product) {
@@ -273,7 +280,8 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               name="sku"
               required
               maxLength={100}
-              defaultValue={product?.sku ?? ""}
+              value={sku}
+              onChange={(event) => setSku(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="Ex.: VASO-RECIFE-001"
             />
@@ -282,7 +290,8 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
             <input
               name="name"
               required
-              defaultValue={product?.name ?? ""}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="Ex.: Vaso Recife"
             />
@@ -294,7 +303,8 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               type="number"
               min="0"
               step="1"
-              defaultValue={product?.quantity ?? ""}
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="10"
             />
@@ -306,7 +316,8 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               type="number"
               min="0"
               step="1"
-              defaultValue={product?.soldQuantity ?? 0}
+              value={soldQuantity}
+              onChange={(event) => setSoldQuantity(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="0"
             />
@@ -316,7 +327,8 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               name="manufacturingValue"
               required
               inputMode="decimal"
-              defaultValue={product ? toMoneyInput(product.manufacturingValue) : ""}
+              value={manufacturingValue}
+              onChange={(event) => setManufacturingValue(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="15,00"
             />
@@ -326,7 +338,8 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               name="saleValue"
               required
               inputMode="decimal"
-              defaultValue={product ? toMoneyInput(product.saleValue) : ""}
+              value={saleValue}
+              onChange={(event) => setSaleValue(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="28,90"
             />
@@ -335,7 +348,8 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
             <input
               name="photoUrl"
               type="url"
-              defaultValue={product?.photoUrl ?? ""}
+              value={photoUrl}
+              onChange={(event) => setPhotoUrl(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="https://exemplo.com/foto.jpg"
             />

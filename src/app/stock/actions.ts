@@ -51,6 +51,15 @@ export async function updateProduct(_: ActionState, formData: FormData): Promise
   }
 
   try {
+    const productWithSku = await prisma.product.findUnique({
+      where: { sku: parsed.data.sku },
+      select: { id: true },
+    });
+
+    if (productWithSku && productWithSku.id !== id) {
+      return { ok: false, message: "Já existe um produto com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
+    }
+
     await prisma.product.update({
       where: { id },
       data: {
