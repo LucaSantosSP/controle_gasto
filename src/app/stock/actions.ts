@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { calculateShopeeFee, roundMoney } from "@/lib/shopee";
-import { parseProductFormData, parseSellProductFormData } from "@/lib/validation";
+import { parseKitComponents, parseProductFormData, parseSellProductFormData } from "@/lib/validation";
 import type { ActionState } from "@/types/transaction";
 
 export async function createProduct(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -19,6 +19,7 @@ export async function createProduct(_: ActionState, formData: FormData): Promise
       data: {
         sku: parsed.data.sku,
         name: parsed.data.name,
+        isKit: false,
         quantity: parsed.data.quantity,
         soldQuantity: parsed.data.soldQuantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
@@ -84,6 +85,56 @@ export async function updateProduct(_: ActionState, formData: FormData): Promise
   }
 }
 
+export async function createKit(_: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = parseProductFormData(formData);
+  const parsedComponents = parseKitComponents(formData.get("components"));
+
+  if (!parsed.success) {
+    return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
+  }
+
+  if (!parsedComponents.success) {
+    return { ok: false, message: parsedComponents.message };
+  }
+
+  const components = mergeComponents(parsedComponents.data);
+
+  try {
+    const componentCount = await prisma.product.count({
+      where: { id: { in: components.map((component) => component.componentId) } },
+    });
+
+    if (componentCount !== components.length) {
+      return { ok: false, message: "Um ou mais itens do kit não foram encontrados." };
+    }
+
+    await prisma.product.create({
+      data: {
+        sku: parsed.data.sku,
+        name: parsed.data.name,
+        isKit: true,
+        quantity: parsed.data.quantity,
+        soldQuantity: parsed.data.soldQuantity,
+        manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
+        saleValue: new Prisma.Decimal(parsed.data.saleValue),
+        photoUrl: parsed.data.photoUrl,
+        kitComponents: {
+          create: components,
+        },
+      },
+    });
+
+    revalidatePath("/stock");
+    return { ok: true, message: "Kit cadastrado com sucesso." };
+  } catch (error) {
+    if (isDuplicateSkuError(error)) {
+      return { ok: false, message: "Já existe um produto com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
+    }
+
+    return { ok: false, message: "Não foi possível cadastrar o kit." };
+  }
+}
+
 export async function deleteProduct(_: ActionState, formData: FormData): Promise<ActionState> {
   const id = Number(formData.get("id"));
 
@@ -108,7 +159,10 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
   }
 
   try {
-    const product = await prisma.product.findUnique({ where: { id } });
+    const product = await prisma.product.findUnique({
+      where: { id },
+      include: { kitComponents: true },
+    });
 
     if (!product) {
       return { ok: false, message: "Produto não encontrado." };
@@ -118,11 +172,18 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
       data: {
         sku: await createDuplicateSku(product.sku),
         name: `${product.name} (cópia)`,
+        isKit: product.isKit,
         quantity: product.quantity,
         soldQuantity: product.soldQuantity,
         manufacturingValue: product.manufacturingValue,
         saleValue: product.saleValue,
         photoUrl: product.photoUrl,
+        kitComponents: {
+          create: product.kitComponents.map((component) => ({
+            componentId: component.componentId,
+            quantity: component.quantity,
+          })),
+        },
       },
     });
 
@@ -147,10 +208,17 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
       return { ok: false, message: "Produto não encontrado." };
     }
 
-    if (parsed.data.quantity > product.quantity) {
+    const [allProducts, allComponents] = await Promise.all([
+      prisma.product.findMany({ select: { id: true, quantity: true, name: true } }),
+      prisma.productComponent.findMany({ select: { kitId: true, componentId: true, quantity: true } }),
+    ]);
+    const requiredQuantities = calculateRequiredQuantities(product.id, parsed.data.quantity, allComponents);
+    const unavailableProduct = allProducts.find((item) => (requiredQuantities.get(item.id) ?? 0) > item.quantity);
+
+    if (unavailableProduct) {
       return {
         ok: false,
-        message: "Quantidade vendida maior que o estoque disponível.",
+        message: `Estoque insuficiente para ${unavailableProduct.name}.`,
         errors: { quantity: ["Quantidade maior que o estoque disponível."] },
       };
     }
@@ -174,15 +242,23 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
           totalValue: new Prisma.Decimal(totalValue),
           platform: parsed.data.platform,
           date: new Date(`${parsed.data.date}T00:00:00.000Z`),
+          stockMovements: {
+            create: Array.from(requiredQuantities.entries()).map(([productId, quantity]) => ({
+              productId,
+              quantity,
+            })),
+          },
         },
       }),
-      prisma.product.update({
-        where: { id: product.id },
-        data: {
-          quantity: { decrement: parsed.data.quantity },
-          soldQuantity: { increment: parsed.data.quantity },
-        },
-      }),
+      ...Array.from(requiredQuantities.entries()).map(([productId, quantity]) =>
+        prisma.product.update({
+          where: { id: productId },
+          data: {
+            quantity: { decrement: quantity },
+            soldQuantity: { increment: quantity },
+          },
+        })
+      ),
     ]);
 
     revalidatePath("/");
@@ -209,6 +285,63 @@ async function createDuplicateSku(sku: string) {
   }
 
   return candidate;
+}
+
+function mergeComponents(components: Array<{ componentId: number; quantity: number }>) {
+  const grouped = new Map<number, number>();
+
+  for (const component of components) {
+    grouped.set(component.componentId, (grouped.get(component.componentId) ?? 0) + component.quantity);
+  }
+
+  return Array.from(grouped.entries()).map(([componentId, quantity]) => ({ componentId, quantity }));
+}
+
+function calculateRequiredQuantities(
+  productId: number,
+  quantity: number,
+  components: Array<{ kitId: number; componentId: number; quantity: number }>
+) {
+  const required = new Map<number, number>();
+  const componentsByKit = new Map<number, Array<{ componentId: number; quantity: number }>>();
+
+  for (const component of components) {
+    const kitComponents = componentsByKit.get(component.kitId) ?? [];
+    kitComponents.push({ componentId: component.componentId, quantity: component.quantity });
+    componentsByKit.set(component.kitId, kitComponents);
+  }
+
+  addRequiredProduct(productId, quantity, componentsByKit, required, new Set<number>());
+
+  return required;
+}
+
+function addRequiredProduct(
+  productId: number,
+  quantity: number,
+  componentsByKit: Map<number, Array<{ componentId: number; quantity: number }>>,
+  required: Map<number, number>,
+  visiting: Set<number>
+) {
+  if (visiting.has(productId)) {
+    throw new Error("Composição circular de kit.");
+  }
+
+  required.set(productId, (required.get(productId) ?? 0) + quantity);
+
+  const components = componentsByKit.get(productId) ?? [];
+
+  if (components.length === 0) {
+    return;
+  }
+
+  visiting.add(productId);
+
+  for (const component of components) {
+    addRequiredProduct(component.componentId, quantity * component.quantity, componentsByKit, required, visiting);
+  }
+
+  visiting.delete(productId);
 }
 
 function calculateSaleValueBeforeFee(

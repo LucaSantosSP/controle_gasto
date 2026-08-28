@@ -60,6 +60,11 @@ export const sellProductSchema = z.object({
     }),
 });
 
+export const kitComponentSchema = z.object({
+  componentId: z.coerce.number().int().positive(),
+  quantity: z.coerce.number().int().positive(),
+});
+
 export const transactionSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome."),
   unitValue: decimalText,
@@ -84,6 +89,7 @@ export const periodSchema = z.object({
 export type TransactionInput = z.infer<typeof transactionSchema>;
 export type ProductInput = z.infer<typeof productSchema>;
 export type SellProductInput = z.infer<typeof sellProductSchema>;
+export type KitComponentInput = z.infer<typeof kitComponentSchema>;
 
 export function parseFormData(formData: FormData) {
   return transactionSchema.safeParse({
@@ -116,6 +122,25 @@ export function parseSellProductFormData(formData: FormData) {
     finalValue: formData.get("finalValue") || "",
     date: formData.get("date"),
   });
+}
+
+export function parseKitComponents(value: FormDataEntryValue | null) {
+  if (typeof value !== "string" || !value.trim()) {
+    return { success: false as const, message: "Adicione pelo menos um item ao kit." };
+  }
+
+  try {
+    const parsedJson = JSON.parse(value) as unknown;
+    const parsed = z.array(kitComponentSchema).min(1, "Adicione pelo menos um item ao kit.").safeParse(parsedJson);
+
+    if (!parsed.success) {
+      return { success: false as const, message: "Confira os itens que compõem o kit." };
+    }
+
+    return { success: true as const, data: parsed.data };
+  } catch {
+    return { success: false as const, message: "Confira os itens que compõem o kit." };
+  }
 }
 
 export function parsePeriod(searchParams: Record<string, string | string[] | undefined>) {

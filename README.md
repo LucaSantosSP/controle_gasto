@@ -109,6 +109,8 @@ O sistema usa três tabelas:
 - `sales`: vendas cadastradas.
 - `expenses`: gastos cadastrados.
 - `products`: produtos em estoque.
+- `product_components`: composição dos kits cadastrados.
+- `sale_stock_movements`: baixas de estoque geradas por vendas feitas a partir do estoque.
 
 Campos principais das duas tabelas:
 
@@ -136,6 +138,7 @@ Campos principais da tabela `products`:
 
 - `id`
 - `name`
+- `isKit`
 - `quantity`
 - `soldQuantity`
 - `manufacturingValue` como `DECIMAL(10,2)`
@@ -143,6 +146,20 @@ Campos principais da tabela `products`:
 - `photoUrl`
 - `createdAt`
 - `updatedAt`
+
+Campos principais da tabela `product_components`:
+
+- `id`
+- `kitId`
+- `componentId`
+- `quantity`
+
+Campos principais da tabela `sale_stock_movements`:
+
+- `id`
+- `saleId`
+- `productId`
+- `quantity`
 
 ## Funcionalidades
 
@@ -153,10 +170,14 @@ Campos principais da tabela `products`:
 - Cadastro, edição e exclusão de gastos.
 - Cadastro, edição, duplicação, exclusão e listagem de produtos em estoque com foto por URL, valor de fabricação e valor de venda.
 - Filtro de produtos por nome ou SKU na tela de estoque.
+- Criação de kits compostos por produtos e/ou outros kits existentes.
+- Baixa recursiva de estoque ao vender kits, descontando o kit vendido e todos os itens que o compõem.
 - Controle de quantidade vendida por produto, editável manualmente e atualizado ao lançar venda pelo estoque.
 - URL de foto opcional no estoque, com ícone padrão quando não houver imagem.
+- Kits sem foto própria exibem miniaturas das imagens dos itens que compõem o kit.
 - Alerta visual em produtos sem estoque.
 - Lançamento de venda diretamente pelo estoque com quantidade vendida, desconto, valor final manual e plataforma.
+- Ao excluir uma venda feita pelo estoque, os produtos e kits daquela venda voltam automaticamente ao estoque.
 - Cálculo automático de taxas Shopee para vendas marcadas como `Vendido na Shopee`.
 - Cálculo do total em tempo real nos formulários.
 - Validações no servidor com Zod.

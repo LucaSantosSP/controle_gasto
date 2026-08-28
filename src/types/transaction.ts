@@ -23,10 +23,21 @@ export type ProductRow = {
   id: number;
   sku: string;
   name: string;
+  isKit: boolean;
   quantity: number;
   soldQuantity: number;
   manufacturingValue: string;
   saleValue: string;
+  photoUrl: string;
+  components: ProductComponentRow[];
+};
+
+export type ProductComponentRow = {
+  componentId: number;
+  sku: string;
+  name: string;
+  quantity: number;
+  isKit: boolean;
   photoUrl: string;
 };
 

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { createProduct, deleteProduct, duplicateProduct, sellProduct, updateProduct } from "@/app/stock/actions";
+import { createKit, createProduct, deleteProduct, duplicateProduct, sellProduct, updateProduct } from "@/app/stock/actions";
 import { formatCurrency, toInputDate, toMoneyInput } from "@/lib/format";
 import { calculateShopeeFee, roundMoney } from "@/lib/shopee";
 import { initialActionState, type ActionState, type ProductRow } from "@/types/transaction";
@@ -12,6 +12,7 @@ type ServerAction = (state: ActionState, formData: FormData) => Promise<ActionSt
 export function StockManager({ products }: { products: ProductRow[] }) {
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [selling, setSelling] = useState<ProductRow | null>(null);
+  const [creatingKit, setCreatingKit] = useState(false);
   const [search, setSearch] = useState("");
   const filteredProducts = products.filter((product) => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -38,10 +39,22 @@ export function StockManager({ products }: { products: ProductRow[] }) {
           >
             Cancelar edição
           </button>
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCreatingKit((current) => !current)}
+            className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            {creatingKit ? "Cancelar kit" : "Criar kit"}
+          </button>
+        )}
       </div>
 
-      <ProductForm key={editing ? `edit-${editing.id}` : "create"} product={editing} onSaved={() => setEditing(null)} />
+      {creatingKit && !editing ? (
+        <KitForm products={products} onSaved={() => setCreatingKit(false)} />
+      ) : (
+        <ProductForm key={editing ? `edit-${editing.id}` : "create"} product={editing} onSaved={() => setEditing(null)} />
+      )}
 
       <section className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -74,42 +87,31 @@ export function StockManager({ products }: { products: ProductRow[] }) {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filteredProducts.map((product) => (
               <article key={product.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="relative aspect-[4/3] bg-slate-100">
-                  {product.quantity <= 0 ? (
-                    <div className="absolute left-3 top-3 z-10 rounded-full bg-red-600 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
-                      Sem estoque
-                    </div>
-                  ) : null}
-                  {product.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={product.photoUrl} alt={product.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-slate-400">
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-16 w-16"
-                      >
-                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-                        <path d="m3.3 7 8.7 5 8.7-5" />
-                        <path d="M12 22V12" />
-                      </svg>
-                      <span className="text-sm font-semibold">Sem imagem</span>
-                    </div>
-                  )}
-                </div>
+                <ProductMedia product={product} />
                 <div className="space-y-4 p-5">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-950">{product.name}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-semibold text-slate-950">{product.name}</h3>
+                      {product.isKit ? (
+                        <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-blue-800">Kit</span>
+                      ) : null}
+                    </div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">SKU: {product.sku}</p>
                     <p className="text-sm text-slate-500">Estoque: {product.quantity}</p>
                     <p className="text-sm text-slate-500">Vendidos: {product.soldQuantity}</p>
                   </div>
+                  {product.components.length > 0 ? (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
+                      <p className="mb-2 font-semibold">Composição do kit</p>
+                      <div className="space-y-1">
+                        {product.components.map((component) => (
+                          <p key={component.componentId}>
+                            {component.quantity}x {component.name} <span className="text-blue-700">({component.sku})</span>
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="grid gap-2 text-sm sm:grid-cols-2">
                     <p className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">
                       Fabricação: <strong className="text-slate-950">{formatCurrency(product.manufacturingValue)}</strong>
@@ -281,6 +283,216 @@ function SellProductModal({ product, onClose }: { product: ProductRow; onClose: 
         </form>
       </section>
     </div>
+  );
+}
+
+function ProductMedia({ product }: { product: ProductRow }) {
+  const componentImages = product.components.filter((component) => component.photoUrl).slice(0, 4);
+
+  return (
+    <div className="relative aspect-[4/3] bg-slate-100">
+      {product.quantity <= 0 ? (
+        <div className="absolute left-3 top-3 z-10 rounded-full bg-red-600 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
+          Sem estoque
+        </div>
+      ) : null}
+      {product.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={product.photoUrl} alt={product.name} className="h-full w-full object-cover" />
+      ) : product.isKit && componentImages.length > 0 ? (
+        <div className={`grid h-full w-full gap-1 p-1 ${componentImages.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+          {componentImages.map((component) => (
+            <div key={component.componentId} className="relative overflow-hidden rounded-lg bg-slate-200">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={component.photoUrl} alt={component.name} className="h-full w-full object-cover" />
+              <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-2 py-1 text-[10px] font-semibold text-white">
+                {component.quantity}x
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <DefaultProductIcon label={product.isKit ? "Kit sem imagem" : "Sem imagem"} />
+      )}
+    </div>
+  );
+}
+
+function DefaultProductIcon({ label }: { label: string }) {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-slate-400">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-16 w-16"
+      >
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+        <path d="m3.3 7 8.7 5 8.7-5" />
+        <path d="M12 22V12" />
+      </svg>
+      <span className="text-sm font-semibold">{label}</span>
+    </div>
+  );
+}
+
+function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () => void }) {
+  const [state, formAction, pending] = useActionState(createKit, initialActionState);
+  const [sku, setSku] = useState("");
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [soldQuantity, setSoldQuantity] = useState("0");
+  const [manufacturingValue, setManufacturingValue] = useState("");
+  const [manufacturingValueEdited, setManufacturingValueEdited] = useState(false);
+  const [saleValue, setSaleValue] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [components, setComponents] = useState<Array<{ componentId: string; quantity: string }>>([{ componentId: "", quantity: "1" }]);
+
+  const suggestedManufacturingValue = roundMoney(
+    components.reduce((total, component) => {
+      const selectedProduct = products.find((product) => product.id === Number(component.componentId));
+      const componentQuantity = Number(component.quantity) || 0;
+
+      if (!selectedProduct || componentQuantity <= 0) {
+        return total;
+      }
+
+      return total + Number(selectedProduct.manufacturingValue) * componentQuantity;
+    }, 0)
+  );
+
+  useEffect(() => {
+    if (state.ok) {
+      onSaved();
+    }
+  }, [onSaved, state.ok]);
+
+  const displayedManufacturingValue = manufacturingValueEdited ? manufacturingValue : toMoneyInput(suggestedManufacturingValue);
+
+  const serializedComponents = JSON.stringify(
+    components
+      .filter((component) => component.componentId && Number(component.quantity) > 0)
+      .map((component) => ({ componentId: Number(component.componentId), quantity: Number(component.quantity) }))
+  );
+
+  return (
+    <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+      <form action={formAction} className="space-y-5">
+        <input type="hidden" name="components" value={serializedComponents} />
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Novo kit</p>
+          <h2 className="text-xl font-bold text-slate-950">Monte um kit a partir de produtos ou outros kits</h2>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Field label="SKU" error={state.errors?.sku?.[0]}>
+            <input name="sku" required maxLength={100} value={sku} onChange={(event) => setSku(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="Ex.: KIT-JARDIM-001" />
+          </Field>
+          <Field label="Nome" error={state.errors?.name?.[0]}>
+            <input name="name" required value={name} onChange={(event) => setName(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="Ex.: Kit Jardim" />
+          </Field>
+          <Field label="Quantidade disponível" error={state.errors?.quantity?.[0]}>
+            <input name="quantity" required type="number" min="0" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="2" />
+          </Field>
+          <Field label="Quantidade vendida" error={state.errors?.soldQuantity?.[0]}>
+            <input name="soldQuantity" required type="number" min="0" step="1" value={soldQuantity} onChange={(event) => setSoldQuantity(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="0" />
+          </Field>
+          <Field label="Valor de fabricação" error={state.errors?.manufacturingValue?.[0]}>
+            <input
+              name="manufacturingValue"
+              required
+              inputMode="decimal"
+              value={displayedManufacturingValue}
+              onChange={(event) => {
+                setManufacturingValueEdited(true);
+                setManufacturingValue(event.target.value);
+              }}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+              placeholder="50,00"
+            />
+            <span className="block text-xs text-blue-700">Sugestão pela composição: {formatCurrency(suggestedManufacturingValue)}</span>
+          </Field>
+          <Field label="Valor de venda" error={state.errors?.saleValue?.[0]}>
+            <input name="saleValue" required inputMode="decimal" value={saleValue} onChange={(event) => setSaleValue(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="89,90" />
+          </Field>
+          <Field label="URL da foto (opcional)" error={state.errors?.photoUrl?.[0]}>
+            <input name="photoUrl" type="url" value={photoUrl} onChange={(event) => setPhotoUrl(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="https://exemplo.com/foto.jpg" />
+          </Field>
+        </div>
+
+        <div className="space-y-3 rounded-2xl border border-blue-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-semibold text-slate-950">Itens que compõem o kit</h3>
+            <button
+              type="button"
+              onClick={() => setComponents((current) => [...current, { componentId: "", quantity: "1" }])}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              Adicionar item
+            </button>
+          </div>
+
+          {products.length === 0 ? (
+            <p className="text-sm text-slate-500">Cadastre pelo menos um produto antes de criar um kit.</p>
+          ) : (
+            components.map((component, index) => (
+              <div key={index} className="grid gap-3 md:grid-cols-[1fr_140px_auto]">
+                <select
+                  value={component.componentId}
+                  onChange={(event) =>
+                    setComponents((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, componentId: event.target.value } : item)))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+                >
+                  <option value="">Selecione um produto ou kit</option>
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.sku} - {product.name}{product.isKit ? " (kit)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={component.quantity}
+                  onChange={(event) =>
+                    setComponents((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: event.target.value } : item)))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+                  placeholder="Qtd."
+                />
+                <button
+                  type="button"
+                  onClick={() => setComponents((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  disabled={components.length === 1}
+                  className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Remover
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          {state.message ? (
+            <p className={`text-sm font-medium ${state.ok ? "text-emerald-700" : "text-red-700"}`}>{state.message}</p>
+          ) : null}
+          <button
+            type="submit"
+            disabled={pending || products.length === 0}
+            className="rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {pending ? "Salvando..." : "Salvar kit"}
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 
