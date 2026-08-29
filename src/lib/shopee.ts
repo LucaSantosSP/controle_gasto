@@ -32,5 +32,11 @@ export function getShopeeFixedFee(itemValue: number) {
 }
 
 export function roundMoney(value: number) {
-  return Math.round(value * 100) / 100;
+  const sign = value < 0 ? -1 : 1;
+  const absoluteValue = Math.abs(value);
+  const thousandths = Math.trunc((absoluteValue + Number.EPSILON) * 1000);
+  const thirdDecimalDigit = thousandths % 10;
+  const cents = Math.trunc(thousandths / 10) + (thirdDecimalDigit >= 5 ? 1 : 0);
+
+  return sign * (cents / 100);
 }
