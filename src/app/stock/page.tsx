@@ -7,9 +7,10 @@ export default async function StockPage() {
   const products = await prisma.product.findMany({
     orderBy: { sku: "asc" },
     include: {
+      variations: { orderBy: { name: "asc" } },
       kitComponents: {
         orderBy: { component: { sku: "asc" } },
-        include: { component: true },
+        include: { component: true, variation: true },
       },
     },
   });
@@ -26,10 +27,20 @@ export default async function StockPage() {
         manufacturingValue: product.manufacturingValue.toString(),
         saleValue: product.saleValue.toString(),
         photoUrl: product.photoUrl,
+        variations: product.variations.map((variation) => ({
+          id: variation.id,
+          sku: variation.sku ?? "",
+          name: variation.name,
+          quantity: variation.quantity,
+          soldQuantity: variation.soldQuantity,
+          manufacturingValue: variation.manufacturingValue.toString(),
+          saleValue: variation.saleValue.toString(),
+        })),
         components: product.kitComponents.map((component) => ({
           componentId: component.componentId,
+          variationId: component.variationId,
           sku: component.component.sku,
-          name: component.component.name,
+          name: component.variation ? `${component.component.name} - ${component.variation.name}` : component.component.name,
           quantity: component.quantity,
           isKit: component.component.isKit,
           photoUrl: component.component.photoUrl,

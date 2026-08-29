@@ -10,11 +10,27 @@ const links = [
 ];
 
 export async function Nav() {
-  const outOfStockProducts = await prisma.product.findMany({
-    where: { quantity: 0 },
-    orderBy: { sku: "asc" },
-    select: { id: true, sku: true, name: true },
-  });
+  const [outOfStockProducts, outOfStockVariations] = await Promise.all([
+    prisma.product.findMany({
+      where: { quantity: 0 },
+      orderBy: { sku: "asc" },
+      select: { id: true, sku: true, name: true },
+    }),
+    prisma.productVariation.findMany({
+      where: { quantity: 0 },
+      orderBy: [{ product: { sku: "asc" } }, { name: "asc" }],
+      select: { id: true, sku: true, name: true, product: { select: { sku: true, name: true } } },
+    }),
+  ]);
+  const outOfStockItems = [
+    ...outOfStockProducts.map((product) => ({ id: `product-${product.id}`, sku: product.sku, name: product.name, type: "product" as const })),
+    ...outOfStockVariations.map((variation) => ({
+      id: `variation-${variation.id}`,
+      sku: variation.sku || variation.product.sku,
+      name: `${variation.product.name} - ${variation.name}`,
+      type: "variation" as const,
+    })),
+  ];
 
   return (
     <header className="border-b border-slate-200 bg-white/90 backdrop-blur">
@@ -50,7 +66,7 @@ export async function Nav() {
               </Link>
             ))}
           </nav>
-          <NotificationBell products={outOfStockProducts} />
+          <NotificationBell products={outOfStockItems} />
         </div>
       </div>
     </header>

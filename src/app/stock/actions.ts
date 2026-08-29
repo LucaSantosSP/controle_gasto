@@ -100,12 +100,32 @@ export async function createKit(_: ActionState, formData: FormData): Promise<Act
   const components = mergeComponents(parsedComponents.data);
 
   try {
-    const componentCount = await prisma.product.count({
-      where: { id: { in: components.map((component) => component.componentId) } },
+    const componentProductIds = Array.from(new Set(components.map((component) => component.componentId)));
+    const componentVariationIds = components
+      .map((component) => component.variationId)
+      .filter((variationId): variationId is number => variationId !== null);
+    const [componentCount, componentVariations] = await Promise.all([
+      prisma.product.count({ where: { id: { in: componentProductIds } } }),
+      prisma.productVariation.findMany({
+        where: { id: { in: componentVariationIds } },
+        select: { id: true, productId: true },
+      }),
+    ]);
+
+    if (componentCount !== componentProductIds.length) {
+      return { ok: false, message: "Um ou mais itens do kit não foram encontrados." };
+    }
+
+    const invalidVariation = components.some((component) => {
+      if (!component.variationId) {
+        return false;
+      }
+
+      return !componentVariations.some((variation) => variation.id === component.variationId && variation.productId === component.componentId);
     });
 
-    if (componentCount !== components.length) {
-      return { ok: false, message: "Um ou mais itens do kit não foram encontrados." };
+    if (invalidVariation) {
+      return { ok: false, message: "Uma ou mais variações do kit não pertencem ao item selecionado." };
     }
 
     await prisma.product.create({
@@ -163,6 +183,43 @@ export async function createVariation(_: ActionState, formData: FormData): Promi
     }
 
     return { ok: false, message: "Não foi possível cadastrar a variação." };
+  }
+}
+
+export async function updateVariation(_: ActionState, formData: FormData): Promise<ActionState> {
+  const id = Number(formData.get("id"));
+  const parsed = parseProductVariationFormData(formData);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return { ok: false, message: "Variação inválida." };
+  }
+
+  if (!parsed.success) {
+    return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
+  }
+
+  try {
+    await prisma.productVariation.update({
+      where: { id },
+      data: {
+        productId: parsed.data.productId,
+        sku: parsed.data.sku || null,
+        name: parsed.data.name,
+        quantity: parsed.data.quantity,
+        soldQuantity: parsed.data.soldQuantity,
+        manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
+        saleValue: new Prisma.Decimal(parsed.data.saleValue),
+      },
+    });
+
+    revalidatePath("/stock");
+    return { ok: true, message: "Variação atualizada com sucesso." };
+  } catch (error) {
+    if (isDuplicateSkuError(error)) {
+      return { ok: false, message: "Já existe uma variação com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
+    }
+
+    return { ok: false, message: "Não foi possível atualizar a variação." };
   }
 }
 

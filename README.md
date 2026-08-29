@@ -109,6 +109,7 @@ O sistema usa três tabelas:
 - `sales`: vendas cadastradas.
 - `expenses`: gastos cadastrados.
 - `products`: produtos em estoque.
+- `product_variations`: variações de produtos, como cor, peso ou outra característica.
 - `product_components`: composição dos kits cadastrados.
 - `sale_stock_movements`: baixas de estoque geradas por vendas feitas a partir do estoque.
 
@@ -152,7 +153,19 @@ Campos principais da tabela `product_components`:
 - `id`
 - `kitId`
 - `componentId`
+- `variationId`
 - `quantity`
+
+Campos principais da tabela `product_variations`:
+
+- `id`
+- `productId`
+- `sku`
+- `name`
+- `quantity`
+- `soldQuantity`
+- `manufacturingValue` como `DECIMAL(10,2)`
+- `saleValue` como `DECIMAL(10,2)`
 
 Campos principais da tabela `sale_stock_movements`:
 
@@ -171,6 +184,8 @@ Campos principais da tabela `sale_stock_movements`:
 - Cadastro, edição, duplicação, exclusão e listagem de produtos em estoque com foto por URL, valor de fabricação e valor de venda.
 - Filtro de produtos por nome ou SKU na tela de estoque.
 - Criação de kits compostos por produtos e/ou outros kits existentes.
+- Criação de variações de produtos, com estoque e preços próprios sugeridos a partir do produto matriz.
+- Kits e vendas permitem selecionar variações específicas dos produtos.
 - Baixa recursiva de estoque ao vender kits, descontando o kit vendido e todos os itens que o compõem.
 - Controle de quantidade vendida por produto, editável manualmente e atualizado ao lançar venda pelo estoque.
 - URL de foto opcional no estoque, com ícone padrão quando não houver imagem.

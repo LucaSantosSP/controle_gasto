@@ -2,16 +2,18 @@
 
 import { useActionState, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { createKit, createProduct, deleteProduct, duplicateProduct, sellProduct, updateProduct } from "@/app/stock/actions";
+import { createKit, createProduct, createVariation, deleteProduct, duplicateProduct, sellProduct, updateProduct, updateVariation } from "@/app/stock/actions";
 import { formatCurrency, toInputDate, toMoneyInput } from "@/lib/format";
 import { calculateShopeeFee, roundMoney } from "@/lib/shopee";
-import { initialActionState, type ActionState, type ProductRow } from "@/types/transaction";
+import { initialActionState, type ActionState, type ProductRow, type ProductVariationRow } from "@/types/transaction";
 
 type ServerAction = (state: ActionState, formData: FormData) => Promise<ActionState>;
 
 export function StockManager({ products }: { products: ProductRow[] }) {
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [selling, setSelling] = useState<ProductRow | null>(null);
+  const [addingVariation, setAddingVariation] = useState<ProductRow | null>(null);
+  const [editingVariation, setEditingVariation] = useState<{ product: ProductRow; variationId: number } | null>(null);
   const [creatingKit, setCreatingKit] = useState(false);
   const [search, setSearch] = useState("");
   const filteredProducts = products.filter((product) => {
@@ -105,9 +107,31 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                       <p className="mb-2 font-semibold">Composição do kit</p>
                       <div className="space-y-1">
                         {product.components.map((component) => (
-                          <p key={component.componentId}>
+                          <p key={`${component.componentId}:${component.variationId ?? ""}`}>
                             {component.quantity}x {component.name} <span className="text-blue-700">({component.sku})</span>
                           </p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {product.variations.length > 0 ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                      <p className="mb-2 font-semibold text-slate-950">Variações</p>
+                      <div className="space-y-1">
+                        {product.variations.map((variation) => (
+                          <div key={variation.id} className="flex flex-wrap items-center justify-between gap-2">
+                            <p className={variation.quantity <= 0 ? "font-semibold text-red-700" : ""}>
+                              {variation.name}: estoque {variation.quantity}, venda {formatCurrency(variation.saleValue)}
+                              {variation.quantity <= 0 ? " | Sem estoque" : ""}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setEditingVariation({ product, variationId: variation.id })}
+                              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                            >
+                              Editar
+                            </button>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -134,12 +158,19 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                     <button
                       type="button"
                       onClick={() => setSelling(product)}
-                      disabled={product.quantity <= 0}
+                      disabled={product.quantity <= 0 && product.variations.every((variation) => variation.quantity <= 0)}
                       className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Vendido
                     </button>
                     <ProductActionForm action={duplicateProduct} id={product.id} label="Duplicar" />
+                    <button
+                      type="button"
+                      onClick={() => setAddingVariation(product)}
+                      className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                    >
+                      Variação
+                    </button>
                     <ProductActionForm action={deleteProduct} id={product.id} label="Excluir" danger confirm="Deseja realmente excluir este produto?" />
                   </div>
                 </div>
@@ -149,13 +180,23 @@ export function StockManager({ products }: { products: ProductRow[] }) {
         )}
       </section>
       {selling ? <SellProductModal product={selling} products={products} onClose={() => setSelling(null)} /> : null}
+      {addingVariation ? <VariationModal product={addingVariation} onClose={() => setAddingVariation(null)} /> : null}
+      {editingVariation ? (
+        <VariationModal
+          product={editingVariation.product}
+          variation={editingVariation.product.variations.find((variation) => variation.id === editingVariation.variationId)}
+          onClose={() => setEditingVariation(null)}
+        />
+      ) : null}
     </div>
   );
 }
 
 function SellProductModal({ product, products, onClose }: { product: ProductRow; products: ProductRow[]; onClose: () => void }) {
   const [state, formAction, pending] = useActionState(sellProduct, initialActionState);
-  const [saleItems, setSaleItems] = useState<Array<{ productId: string; quantity: string }>>([{ productId: product.id.toString(), quantity: "1" }]);
+  const [saleItems, setSaleItems] = useState<Array<{ productId: string; variationId: string; quantity: string }>>([
+    { productId: product.id.toString(), variationId: "", quantity: "1" },
+  ]);
   const [platform, setPlatform] = useState("PERSONAL");
   const [discountType, setDiscountType] = useState("NONE");
   const [discountValue, setDiscountValue] = useState("");
@@ -163,13 +204,14 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
 
   const validSaleItems = saleItems
     .filter((item) => item.productId && Number(item.quantity) > 0)
-    .map((item) => ({ productId: Number(item.productId), quantity: Number(item.quantity) }));
+    .map((item) => ({ productId: Number(item.productId), variationId: item.variationId ? Number(item.variationId) : null, quantity: Number(item.quantity) }));
   const soldQuantity = validSaleItems.reduce((total, item) => total + item.quantity, 0);
   const grossValue = roundMoney(
     validSaleItems.reduce((total, item) => {
       const selectedProduct = products.find((currentProduct) => currentProduct.id === item.productId);
+      const selectedVariation = selectedProduct?.variations.find((variation) => variation.id === item.variationId);
 
-      return total + (selectedProduct ? Number(selectedProduct.saleValue) * item.quantity : 0);
+      return total + (selectedProduct ? Number(selectedVariation?.saleValue ?? selectedProduct.saleValue) * item.quantity : 0);
     }, 0)
   );
   const manualFinalValue = parseMoney(finalValue);
@@ -201,7 +243,7 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
               <h3 className="font-semibold text-slate-950">Itens da venda</h3>
               <button
                 type="button"
-                onClick={() => setSaleItems((current) => [...current, { productId: "", quantity: "1" }])}
+                onClick={() => setSaleItems((current) => [...current, { productId: "", variationId: "", quantity: "1" }])}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
               >
                 Adicionar produto
@@ -211,11 +253,13 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
               const selectedProduct = products.find((currentProduct) => currentProduct.id === Number(item.productId));
 
               return (
-                <div key={index} className="grid gap-3 md:grid-cols-[1fr_130px_auto]">
+                <div key={index} className="grid gap-3 md:grid-cols-[1fr_180px_130px_auto]">
                   <select
                     value={item.productId}
                     onChange={(event) =>
-                      setSaleItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, productId: event.target.value } : currentItem)))
+                      setSaleItems((current) =>
+                        current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, productId: event.target.value, variationId: "" } : currentItem))
+                      )
                     }
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-slate-950"
                   >
@@ -226,10 +270,25 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
                       </option>
                     ))}
                   </select>
+                  <select
+                    value={item.variationId}
+                    onChange={(event) =>
+                      setSaleItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, variationId: event.target.value } : currentItem)))
+                    }
+                    disabled={!selectedProduct || selectedProduct.variations.length === 0}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-slate-950 disabled:bg-slate-100"
+                  >
+                    <option value="">Sem variação</option>
+                    {selectedProduct?.variations.map((variation) => (
+                      <option key={variation.id} value={variation.id}>
+                        {variation.name} | Estoque: {variation.quantity}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="number"
                     min="1"
-                    max={selectedProduct?.quantity}
+                    max={item.variationId ? selectedProduct?.variations.find((variation) => variation.id === Number(item.variationId))?.quantity : selectedProduct?.quantity}
                     step="1"
                     value={item.quantity}
                     onChange={(event) =>
@@ -337,6 +396,70 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
   );
 }
 
+function VariationModal({ product, variation, onClose }: { product: ProductRow; variation?: ProductVariationRow; onClose: () => void }) {
+  const [state, formAction, pending] = useActionState(variation ? updateVariation : createVariation, initialActionState);
+  const [sku, setSku] = useState(variation?.sku ?? "");
+  const [name, setName] = useState(variation?.name ?? "");
+  const [quantity, setQuantity] = useState(variation?.quantity.toString() ?? "0");
+  const [soldQuantity, setSoldQuantity] = useState(variation?.soldQuantity.toString() ?? "0");
+  const [manufacturingValue, setManufacturingValue] = useState(variation ? toMoneyInput(variation.manufacturingValue) : toMoneyInput(product.manufacturingValue));
+  const [saleValue, setSaleValue] = useState(variation ? toMoneyInput(variation.saleValue) : toMoneyInput(product.saleValue));
+
+  useEffect(() => {
+    if (state.ok) {
+      onClose();
+    }
+  }, [onClose, state.ok]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+      <section className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-wide text-slate-500">{variation ? "Editar variação" : "Nova variação"}</p>
+            <h2 className="text-2xl font-bold text-slate-950">{product.name}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+            Fechar
+          </button>
+        </div>
+        <form action={formAction} className="space-y-5">
+          {variation ? <input type="hidden" name="id" value={variation.id} /> : null}
+          <input type="hidden" name="productId" value={product.id} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="SKU da variação (opcional)" error={state.errors?.sku?.[0]}>
+              <input name="sku" maxLength={100} value={sku} onChange={(event) => setSku(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder={`${product.sku}-AZUL`} />
+            </Field>
+            <Field label="Nome da variação" error={state.errors?.name?.[0]}>
+              <input name="name" required value={name} onChange={(event) => setName(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="Ex.: Azul, 500g" />
+            </Field>
+            <Field label="Quantidade" error={state.errors?.quantity?.[0]}>
+              <input name="quantity" type="number" min="0" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" />
+            </Field>
+            <Field label="Quantidade vendida" error={state.errors?.soldQuantity?.[0]}>
+              <input name="soldQuantity" type="number" min="0" step="1" required value={soldQuantity} onChange={(event) => setSoldQuantity(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" />
+            </Field>
+            <Field label="Valor de fabricação" error={state.errors?.manufacturingValue?.[0]}>
+              <input name="manufacturingValue" required inputMode="decimal" value={manufacturingValue} onChange={(event) => setManufacturingValue(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" />
+            </Field>
+            <Field label="Valor de venda" error={state.errors?.saleValue?.[0]}>
+              <input name="saleValue" required inputMode="decimal" value={saleValue} onChange={(event) => setSaleValue(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" />
+            </Field>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+            {state.message ? (
+              <p className={`text-sm font-medium ${state.ok ? "text-emerald-700" : "text-red-700"}`}>{state.message}</p>
+            ) : null}
+            <button type="submit" disabled={pending} className="rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60">
+              {pending ? "Salvando..." : variation ? "Salvar alterações" : "Salvar variação"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 function ProductMedia({ product }: { product: ProductRow }) {
   const componentImages = product.components.filter((component) => component.photoUrl).slice(0, 4);
 
@@ -347,13 +470,18 @@ function ProductMedia({ product }: { product: ProductRow }) {
           Sem estoque
         </div>
       ) : null}
+      {product.quantity > 0 && product.variations.some((variation) => variation.quantity <= 0) ? (
+        <div className="absolute left-3 top-3 z-10 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
+          Variação sem estoque
+        </div>
+      ) : null}
       {product.photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={product.photoUrl} alt={product.name} className="h-full w-full object-cover" />
       ) : product.isKit && componentImages.length > 0 ? (
         <div className={`grid h-full w-full gap-1 p-1 ${componentImages.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
           {componentImages.map((component) => (
-            <div key={component.componentId} className="relative overflow-hidden rounded-lg bg-slate-200">
+            <div key={`${component.componentId}:${component.variationId ?? ""}`} className="relative overflow-hidden rounded-lg bg-slate-200">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={component.photoUrl} alt={component.name} className="h-full w-full object-cover" />
               <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-2 py-1 text-[10px] font-semibold text-white">
@@ -401,18 +529,21 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
   const [manufacturingValueEdited, setManufacturingValueEdited] = useState(false);
   const [saleValue, setSaleValue] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
-  const [components, setComponents] = useState<Array<{ componentId: string; quantity: string }>>([{ componentId: "", quantity: "1" }]);
+  const [components, setComponents] = useState<Array<{ componentId: string; variationId: string; quantity: string }>>([
+    { componentId: "", variationId: "", quantity: "1" },
+  ]);
 
   const suggestedManufacturingValue = roundMoney(
     components.reduce((total, component) => {
       const selectedProduct = products.find((product) => product.id === Number(component.componentId));
+      const selectedVariation = selectedProduct?.variations.find((variation) => variation.id === Number(component.variationId));
       const componentQuantity = Number(component.quantity) || 0;
 
       if (!selectedProduct || componentQuantity <= 0) {
         return total;
       }
 
-      return total + Number(selectedProduct.manufacturingValue) * componentQuantity;
+      return total + Number(selectedVariation?.manufacturingValue ?? selectedProduct.manufacturingValue) * componentQuantity;
     }, 0)
   );
 
@@ -427,7 +558,11 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
   const serializedComponents = JSON.stringify(
     components
       .filter((component) => component.componentId && Number(component.quantity) > 0)
-      .map((component) => ({ componentId: Number(component.componentId), quantity: Number(component.quantity) }))
+      .map((component) => ({
+        componentId: Number(component.componentId),
+        variationId: component.variationId ? Number(component.variationId) : null,
+        quantity: Number(component.quantity),
+      }))
   );
 
   return (
@@ -480,7 +615,7 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
             <h3 className="font-semibold text-slate-950">Itens que compõem o kit</h3>
             <button
               type="button"
-              onClick={() => setComponents((current) => [...current, { componentId: "", quantity: "1" }])}
+              onClick={() => setComponents((current) => [...current, { componentId: "", variationId: "", quantity: "1" }])}
               className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
             >
               Adicionar item
@@ -490,12 +625,15 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
           {products.length === 0 ? (
             <p className="text-sm text-slate-500">Cadastre pelo menos um produto antes de criar um kit.</p>
           ) : (
-            components.map((component, index) => (
-              <div key={index} className="grid gap-3 md:grid-cols-[1fr_140px_auto]">
+            components.map((component, index) => {
+              const selectedProduct = products.find((product) => product.id === Number(component.componentId));
+
+              return (
+              <div key={index} className="grid gap-3 md:grid-cols-[1fr_180px_140px_auto]">
                 <select
                   value={component.componentId}
                   onChange={(event) =>
-                    setComponents((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, componentId: event.target.value } : item)))
+                    setComponents((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, componentId: event.target.value, variationId: "" } : item)))
                   }
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
                 >
@@ -503,6 +641,21 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
                   {products.map((product) => (
                     <option key={product.id} value={product.id}>
                       {product.sku} - {product.name}{product.isKit ? " (kit)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={component.variationId}
+                  onChange={(event) =>
+                    setComponents((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, variationId: event.target.value } : item)))
+                  }
+                  disabled={!selectedProduct || selectedProduct.variations.length === 0}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950 disabled:bg-slate-100"
+                >
+                  <option value="">Sem variação</option>
+                  {selectedProduct?.variations.map((variation) => (
+                    <option key={variation.id} value={variation.id}>
+                      {variation.name}
                     </option>
                   ))}
                 </select>
@@ -526,7 +679,8 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
                   Remover
                 </button>
               </div>
-            ))
+              );
+            })
           )}
         </div>
 

@@ -4,9 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 
 type OutOfStockProduct = {
-  id: number;
+  id: string;
   sku: string;
   name: string;
+  type: "product" | "variation";
 };
 
 export function NotificationBell({ products }: { products: OutOfStockProduct[] }) {
@@ -45,7 +46,7 @@ export function NotificationBell({ products }: { products: OutOfStockProduct[] }
       {open ? (
         <div className="absolute right-0 z-50 mt-3 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           <div className="border-b border-slate-200 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-950">Produtos sem estoque</p>
+            <p className="text-sm font-semibold text-slate-950">Itens sem estoque</p>
             <p className="text-xs text-slate-500">Quantidade zerada no cadastro de estoque.</p>
           </div>
           <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
@@ -53,6 +54,7 @@ export function NotificationBell({ products }: { products: OutOfStockProduct[] }
               <Link key={product.id} href="/stock" onClick={() => setOpen(false)} className="block px-4 py-3 hover:bg-slate-50">
                 <p className="text-sm font-semibold text-slate-950">{product.name}</p>
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">SKU: {product.sku}</p>
+                <p className="text-xs text-red-700">{product.type === "variation" ? "Variação sem estoque" : "Produto sem estoque"}</p>
               </Link>
             ))}
           </div>
