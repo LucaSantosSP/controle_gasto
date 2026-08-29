@@ -29,11 +29,23 @@ export type ProductRow = {
   manufacturingValue: string;
   saleValue: string;
   photoUrl: string;
+  variations: ProductVariationRow[];
   components: ProductComponentRow[];
+};
+
+export type ProductVariationRow = {
+  id: number;
+  sku: string;
+  name: string;
+  quantity: number;
+  soldQuantity: number;
+  manufacturingValue: string;
+  saleValue: string;
 };
 
 export type ProductComponentRow = {
   componentId: number;
+  variationId: number | null;
   sku: string;
   name: string;
   quantity: number;

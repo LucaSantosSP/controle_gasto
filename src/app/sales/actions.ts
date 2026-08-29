@@ -86,18 +86,26 @@ export async function deleteSale(_: ActionState, formData: FormData): Promise<Ac
   try {
     const stockMovements = await prisma.saleStockMovement.findMany({
       where: { saleId: id },
-      select: { productId: true, quantity: true },
+      select: { productId: true, variationId: true, quantity: true },
     });
 
     await prisma.$transaction([
       ...stockMovements.map((movement) =>
-        prisma.product.update({
-          where: { id: movement.productId },
-          data: {
-            quantity: { increment: movement.quantity },
-            soldQuantity: { decrement: movement.quantity },
-          },
-        })
+        movement.variationId
+          ? prisma.productVariation.update({
+              where: { id: movement.variationId },
+              data: {
+                quantity: { increment: movement.quantity },
+                soldQuantity: { decrement: movement.quantity },
+              },
+            })
+          : prisma.product.update({
+              where: { id: movement.productId },
+              data: {
+                quantity: { increment: movement.quantity },
+                soldQuantity: { decrement: movement.quantity },
+              },
+            })
       ),
       prisma.sale.delete({ where: { id } }),
     ]);

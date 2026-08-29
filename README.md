@@ -177,6 +177,7 @@ Campos principais da tabela `sale_stock_movements`:
 - Kits sem foto própria exibem miniaturas das imagens dos itens que compõem o kit.
 - Alerta visual em produtos sem estoque.
 - Lançamento de venda diretamente pelo estoque com quantidade vendida, desconto, valor final manual e plataforma.
+- Venda única com múltiplos produtos e/ou kits pelo modal `Vendido`.
 - Ao excluir uma venda feita pelo estoque, os produtos e kits daquela venda voltam automaticamente ao estoque.
 - Cálculo automático de taxas Shopee para vendas marcadas como `Vendido na Shopee`.
 - Cálculo do total em tempo real nos formulários.

@@ -148,27 +148,37 @@ export function StockManager({ products }: { products: ProductRow[] }) {
           </div>
         )}
       </section>
-      {selling ? <SellProductModal product={selling} onClose={() => setSelling(null)} /> : null}
+      {selling ? <SellProductModal product={selling} products={products} onClose={() => setSelling(null)} /> : null}
     </div>
   );
 }
 
-function SellProductModal({ product, onClose }: { product: ProductRow; onClose: () => void }) {
+function SellProductModal({ product, products, onClose }: { product: ProductRow; products: ProductRow[]; onClose: () => void }) {
   const [state, formAction, pending] = useActionState(sellProduct, initialActionState);
-  const [quantity, setQuantity] = useState("1");
+  const [saleItems, setSaleItems] = useState<Array<{ productId: string; quantity: string }>>([{ productId: product.id.toString(), quantity: "1" }]);
   const [platform, setPlatform] = useState("PERSONAL");
   const [discountType, setDiscountType] = useState("NONE");
   const [discountValue, setDiscountValue] = useState("");
   const [finalValue, setFinalValue] = useState("");
 
-  const parsedQuantity = Math.max(Number(quantity) || 0, 0);
-  const grossValue = roundMoney(Number(product.saleValue) * parsedQuantity);
+  const validSaleItems = saleItems
+    .filter((item) => item.productId && Number(item.quantity) > 0)
+    .map((item) => ({ productId: Number(item.productId), quantity: Number(item.quantity) }));
+  const soldQuantity = validSaleItems.reduce((total, item) => total + item.quantity, 0);
+  const grossValue = roundMoney(
+    validSaleItems.reduce((total, item) => {
+      const selectedProduct = products.find((currentProduct) => currentProduct.id === item.productId);
+
+      return total + (selectedProduct ? Number(selectedProduct.saleValue) * item.quantity : 0);
+    }, 0)
+  );
   const manualFinalValue = parseMoney(finalValue);
   const discount = calculateDiscount(grossValue, discountType, parseMoney(discountValue), manualFinalValue);
   const valueBeforeFee = typeof manualFinalValue === "number" ? manualFinalValue : roundMoney(Math.max(grossValue - discount, 0));
-  const itemValueBeforeFee = parsedQuantity > 0 ? roundMoney(valueBeforeFee / parsedQuantity) : 0;
-  const platformFee = platform === "SHOPEE" ? calculateShopeeFee(itemValueBeforeFee, parsedQuantity) : 0;
+  const itemValueBeforeFee = soldQuantity > 0 ? roundMoney(valueBeforeFee / soldQuantity) : 0;
+  const platformFee = platform === "SHOPEE" ? calculateShopeeFee(itemValueBeforeFee, soldQuantity) : 0;
   const netValue = roundMoney(Math.max(valueBeforeFee - platformFee, 0));
+  const serializedItems = JSON.stringify(validSaleItems);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
@@ -176,8 +186,8 @@ function SellProductModal({ product, onClose }: { product: ProductRow; onClose: 
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium uppercase tracking-wide text-slate-500">Venda de produto</p>
-            <h2 className="text-2xl font-bold text-slate-950">{product.name}</h2>
-            <p className="text-sm text-slate-500">SKU: {product.sku} | Estoque: {product.quantity}</p>
+            <h2 className="text-2xl font-bold text-slate-950">Nova venda</h2>
+            <p className="text-sm text-slate-500">Produto inicial: {product.name} | SKU: {product.sku}</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
             Fechar
@@ -185,21 +195,62 @@ function SellProductModal({ product, onClose }: { product: ProductRow; onClose: 
         </div>
 
         <form action={formAction} className="space-y-5">
-          <input type="hidden" name="productId" value={product.id} />
+          <input type="hidden" name="items" value={serializedItems} />
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-semibold text-slate-950">Itens da venda</h3>
+              <button
+                type="button"
+                onClick={() => setSaleItems((current) => [...current, { productId: "", quantity: "1" }])}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Adicionar produto
+              </button>
+            </div>
+            {saleItems.map((item, index) => {
+              const selectedProduct = products.find((currentProduct) => currentProduct.id === Number(item.productId));
+
+              return (
+                <div key={index} className="grid gap-3 md:grid-cols-[1fr_130px_auto]">
+                  <select
+                    value={item.productId}
+                    onChange={(event) =>
+                      setSaleItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, productId: event.target.value } : currentItem)))
+                    }
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-slate-950"
+                  >
+                    <option value="">Selecione um produto ou kit</option>
+                    {products.map((currentProduct) => (
+                      <option key={currentProduct.id} value={currentProduct.id}>
+                        {currentProduct.sku} - {currentProduct.name}{currentProduct.isKit ? " (kit)" : ""} | Estoque: {currentProduct.quantity}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="1"
+                    max={selectedProduct?.quantity}
+                    step="1"
+                    value={item.quantity}
+                    onChange={(event) =>
+                      setSaleItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, quantity: event.target.value } : currentItem)))
+                    }
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-slate-950"
+                    placeholder="Qtd."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSaleItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    disabled={saleItems.length === 1}
+                    className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Remover
+                  </button>
+                </div>
+              );
+            })}
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Quantidade vendida" error={state.errors?.quantity?.[0]}>
-              <input
-                name="quantity"
-                type="number"
-                min="1"
-                max={product.quantity}
-                step="1"
-                required
-                value={quantity}
-                onChange={(event) => setQuantity(event.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
-              />
-            </Field>
             <Field label="Data da venda" error={state.errors?.date?.[0]}>
               <input
                 name="date"
@@ -274,7 +325,7 @@ function SellProductModal({ product, onClose }: { product: ProductRow; onClose: 
             ) : null}
             <button
               type="submit"
-              disabled={pending || parsedQuantity <= 0}
+              disabled={pending || soldQuantity <= 0}
               className="rounded-lg bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {pending ? "Lançando..." : "Confirmar venda"}

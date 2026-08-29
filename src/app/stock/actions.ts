@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { calculateShopeeFee, roundMoney } from "@/lib/shopee";
-import { parseKitComponents, parseProductFormData, parseSellProductFormData } from "@/lib/validation";
+import { parseKitComponents, parseProductFormData, parseProductVariationFormData, parseSaleItems, parseSellProductFormData } from "@/lib/validation";
 import type { ActionState } from "@/types/transaction";
 
 export async function createProduct(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -135,6 +135,37 @@ export async function createKit(_: ActionState, formData: FormData): Promise<Act
   }
 }
 
+export async function createVariation(_: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = parseProductVariationFormData(formData);
+
+  if (!parsed.success) {
+    return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
+  }
+
+  try {
+    await prisma.productVariation.create({
+      data: {
+        productId: parsed.data.productId,
+        sku: parsed.data.sku || null,
+        name: parsed.data.name,
+        quantity: parsed.data.quantity,
+        soldQuantity: parsed.data.soldQuantity,
+        manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
+        saleValue: new Prisma.Decimal(parsed.data.saleValue),
+      },
+    });
+
+    revalidatePath("/stock");
+    return { ok: true, message: "Variação cadastrada com sucesso." };
+  } catch (error) {
+    if (isDuplicateSkuError(error)) {
+      return { ok: false, message: "Já existe uma variação com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
+    }
+
+    return { ok: false, message: "Não foi possível cadastrar a variação." };
+  }
+}
+
 export async function deleteProduct(_: ActionState, formData: FormData): Promise<ActionState> {
   const id = Number(formData.get("id"));
 
@@ -181,6 +212,7 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
         kitComponents: {
           create: product.kitComponents.map((component) => ({
             componentId: component.componentId,
+            variationId: component.variationId,
             quantity: component.quantity,
           })),
         },
@@ -196,24 +228,55 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
 
 export async function sellProduct(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = parseSellProductFormData(formData);
+  const parsedItems = parseSaleItems(formData.get("items"));
 
   if (!parsed.success) {
     return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
   }
 
+  if (!parsedItems.success) {
+    return { ok: false, message: parsedItems.message };
+  }
+
   try {
-    const product = await prisma.product.findUnique({ where: { id: parsed.data.productId } });
-
-    if (!product) {
-      return { ok: false, message: "Produto não encontrado." };
-    }
-
     const [allProducts, allComponents] = await Promise.all([
-      prisma.product.findMany({ select: { id: true, quantity: true, name: true } }),
-      prisma.productComponent.findMany({ select: { kitId: true, componentId: true, quantity: true } }),
+      prisma.product.findMany({
+        select: {
+          id: true,
+          quantity: true,
+          name: true,
+          saleValue: true,
+          variations: { select: { id: true, productId: true, quantity: true, name: true, saleValue: true } },
+        },
+      }),
+      prisma.productComponent.findMany({ select: { kitId: true, componentId: true, variationId: true, quantity: true } }),
     ]);
-    const requiredQuantities = calculateRequiredQuantities(product.id, parsed.data.quantity, allComponents);
-    const unavailableProduct = allProducts.find((item) => (requiredQuantities.get(item.id) ?? 0) > item.quantity);
+    const saleItems = mergeSaleItems(parsedItems.data);
+    const selectedProducts = saleItems.map((item) => {
+      const product = allProducts.find((currentProduct) => currentProduct.id === item.productId);
+
+      if (!product) {
+        throw new Error("Produto não encontrado.");
+      }
+
+      const variation = item.variationId ? product.variations.find((currentVariation) => currentVariation.id === item.variationId) : null;
+
+      if (item.variationId && !variation) {
+        throw new Error("Variação não encontrada.");
+      }
+
+      return { ...product, selectedVariation: variation, saleQuantity: item.quantity };
+    });
+    const requiredQuantities = new Map<string, { productId: number; variationId: number | null; quantity: number }>();
+
+    for (const item of saleItems) {
+      const itemRequiredQuantities = calculateRequiredQuantities(item.productId, item.variationId ?? null, item.quantity, allComponents);
+
+      for (const movement of itemRequiredQuantities.values()) {
+        addRequiredMovement(requiredQuantities, movement.productId, movement.variationId, movement.quantity);
+      }
+    }
+    const unavailableProduct = findUnavailableStock(requiredQuantities, allProducts);
 
     if (unavailableProduct) {
       return {
@@ -223,19 +286,25 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
       };
     }
 
-    const grossValue = roundMoney(Number(product.saleValue) * parsed.data.quantity);
+    const soldQuantity = selectedProducts.reduce((total, product) => total + product.saleQuantity, 0);
+    const grossValue = roundMoney(
+      selectedProducts.reduce((total, product) => total + Number(product.selectedVariation?.saleValue ?? product.saleValue) * product.saleQuantity, 0)
+    );
     const saleValueBeforeFee = calculateSaleValueBeforeFee(grossValue, parsed.data.discountType, parsed.data.discountValue, parsed.data.finalValue);
     const discountValue = roundMoney(Math.max(grossValue - saleValueBeforeFee, 0));
-    const unitValueBeforeFee = roundMoney(saleValueBeforeFee / parsed.data.quantity);
-    const platformFeeValue = parsed.data.platform === "SHOPEE" ? calculateShopeeFee(unitValueBeforeFee, parsed.data.quantity) : 0;
+    const unitValueBeforeFee = roundMoney(saleValueBeforeFee / soldQuantity);
+    const platformFeeValue = parsed.data.platform === "SHOPEE" ? calculateShopeeFee(unitValueBeforeFee, soldQuantity) : 0;
     const totalValue = roundMoney(Math.max(saleValueBeforeFee - platformFeeValue, 0));
+    const saleName = selectedProducts
+      .map((product) => `${product.saleQuantity}x ${product.name}${product.selectedVariation ? ` - ${product.selectedVariation.name}` : ""}`)
+      .join(" + ");
 
     await prisma.$transaction([
       prisma.sale.create({
         data: {
-          name: product.name,
-          unitValue: new Prisma.Decimal(roundMoney(totalValue / parsed.data.quantity)),
-          quantity: parsed.data.quantity,
+          name: saleName,
+          unitValue: new Prisma.Decimal(roundMoney(totalValue / soldQuantity)),
+          quantity: soldQuantity,
           grossValue: new Prisma.Decimal(grossValue),
           discountValue: new Prisma.Decimal(discountValue),
           platformFeeValue: new Prisma.Decimal(platformFeeValue),
@@ -243,21 +312,24 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
           platform: parsed.data.platform,
           date: new Date(`${parsed.data.date}T00:00:00.000Z`),
           stockMovements: {
-            create: Array.from(requiredQuantities.entries()).map(([productId, quantity]) => ({
-              productId,
-              quantity,
+            create: Array.from(requiredQuantities.values()).map((movement) => ({
+              productId: movement.productId,
+              variationId: movement.variationId,
+              quantity: movement.quantity,
             })),
           },
         },
       }),
-      ...Array.from(requiredQuantities.entries()).map(([productId, quantity]) =>
-        prisma.product.update({
-          where: { id: productId },
-          data: {
-            quantity: { decrement: quantity },
-            soldQuantity: { increment: quantity },
-          },
-        })
+      ...Array.from(requiredQuantities.values()).map((movement) =>
+        movement.variationId
+          ? prisma.productVariation.update({
+              where: { id: movement.variationId },
+              data: { quantity: { decrement: movement.quantity }, soldQuantity: { increment: movement.quantity } },
+            })
+          : prisma.product.update({
+              where: { id: movement.productId },
+              data: { quantity: { decrement: movement.quantity }, soldQuantity: { increment: movement.quantity } },
+            })
       ),
     ]);
 
@@ -287,47 +359,73 @@ async function createDuplicateSku(sku: string) {
   return candidate;
 }
 
-function mergeComponents(components: Array<{ componentId: number; quantity: number }>) {
-  const grouped = new Map<number, number>();
+function mergeComponents(components: Array<{ componentId: number; variationId?: number | null; quantity: number }>) {
+  const grouped = new Map<string, { componentId: number; variationId: number | null; quantity: number }>();
 
   for (const component of components) {
-    grouped.set(component.componentId, (grouped.get(component.componentId) ?? 0) + component.quantity);
+    const key = movementKey(component.componentId, component.variationId ?? null);
+    const current = grouped.get(key);
+
+    grouped.set(key, {
+      componentId: component.componentId,
+      variationId: component.variationId ?? null,
+      quantity: (current?.quantity ?? 0) + component.quantity,
+    });
   }
 
-  return Array.from(grouped.entries()).map(([componentId, quantity]) => ({ componentId, quantity }));
+  return Array.from(grouped.values());
+}
+
+function mergeSaleItems(items: Array<{ productId: number; variationId?: number | null; quantity: number }>) {
+  const grouped = new Map<string, { productId: number; variationId: number | null; quantity: number }>();
+
+  for (const item of items) {
+    const key = movementKey(item.productId, item.variationId ?? null);
+    const current = grouped.get(key);
+
+    grouped.set(key, {
+      productId: item.productId,
+      variationId: item.variationId ?? null,
+      quantity: (current?.quantity ?? 0) + item.quantity,
+    });
+  }
+
+  return Array.from(grouped.values());
 }
 
 function calculateRequiredQuantities(
   productId: number,
+  variationId: number | null,
   quantity: number,
-  components: Array<{ kitId: number; componentId: number; quantity: number }>
+  components: Array<{ kitId: number; componentId: number; variationId: number | null; quantity: number }>
 ) {
-  const required = new Map<number, number>();
-  const componentsByKit = new Map<number, Array<{ componentId: number; quantity: number }>>();
+  const required = new Map<string, { productId: number; variationId: number | null; quantity: number }>();
+  const componentsByKit = new Map<number, Array<{ componentId: number; variationId: number | null; quantity: number }>>();
 
   for (const component of components) {
     const kitComponents = componentsByKit.get(component.kitId) ?? [];
-    kitComponents.push({ componentId: component.componentId, quantity: component.quantity });
+    kitComponents.push({ componentId: component.componentId, variationId: component.variationId, quantity: component.quantity });
     componentsByKit.set(component.kitId, kitComponents);
   }
 
-  addRequiredProduct(productId, quantity, componentsByKit, required, new Set<number>());
+  addRequiredProduct(productId, variationId, quantity, componentsByKit, required, new Set<number>());
 
   return required;
 }
 
 function addRequiredProduct(
   productId: number,
+  variationId: number | null,
   quantity: number,
-  componentsByKit: Map<number, Array<{ componentId: number; quantity: number }>>,
-  required: Map<number, number>,
+  componentsByKit: Map<number, Array<{ componentId: number; variationId: number | null; quantity: number }>>,
+  required: Map<string, { productId: number; variationId: number | null; quantity: number }>,
   visiting: Set<number>
 ) {
   if (visiting.has(productId)) {
     throw new Error("Composição circular de kit.");
   }
 
-  required.set(productId, (required.get(productId) ?? 0) + quantity);
+  addRequiredMovement(required, productId, variationId, quantity);
 
   const components = componentsByKit.get(productId) ?? [];
 
@@ -338,10 +436,53 @@ function addRequiredProduct(
   visiting.add(productId);
 
   for (const component of components) {
-    addRequiredProduct(component.componentId, quantity * component.quantity, componentsByKit, required, visiting);
+    addRequiredProduct(component.componentId, component.variationId, quantity * component.quantity, componentsByKit, required, visiting);
   }
 
   visiting.delete(productId);
+}
+
+function addRequiredMovement(
+  required: Map<string, { productId: number; variationId: number | null; quantity: number }>,
+  productId: number,
+  variationId: number | null,
+  quantity: number
+) {
+  const key = movementKey(productId, variationId);
+  const current = required.get(key);
+
+  required.set(key, {
+    productId,
+    variationId,
+    quantity: (current?.quantity ?? 0) + quantity,
+  });
+}
+
+function findUnavailableStock(
+  required: Map<string, { productId: number; variationId: number | null; quantity: number }>,
+  products: Array<{
+    id: number;
+    name: string;
+    quantity: number;
+    variations: Array<{ id: number; name: string; quantity: number }>;
+  }>
+) {
+  for (const movement of required.values()) {
+    const product = products.find((item) => item.id === movement.productId);
+    const stockQuantity = movement.variationId ? product?.variations.find((variation) => variation.id === movement.variationId)?.quantity : product?.quantity;
+
+    if ((stockQuantity ?? 0) < movement.quantity) {
+      const variation = movement.variationId ? product?.variations.find((item) => item.id === movement.variationId) : null;
+
+      return { name: variation ? `${product?.name} - ${variation.name}` : product?.name ?? "produto" };
+    }
+  }
+
+  return null;
+}
+
+function movementKey(productId: number, variationId: number | null) {
+  return `${productId}:${variationId ?? ""}`;
 }
 
 function calculateSaleValueBeforeFee(
