@@ -186,6 +186,7 @@ Campos principais da tabela `sale_stock_movements`:
 - Criação de kits compostos por produtos e/ou outros kits existentes.
 - Criação de variações de produtos, com estoque e preços próprios sugeridos a partir do produto matriz.
 - Kits e vendas permitem selecionar variações específicas dos produtos.
+- Ao adicionar itens em kits ou vendas, a escolha de produtos/kits é feita por modal com busca por nome, SKU ou variação.
 - Baixa recursiva de estoque ao vender kits, descontando o kit vendido e todos os itens que o compõem.
 - Controle de quantidade vendida por produto, editável manualmente e atualizado ao lançar venda pelo estoque.
 - URL de foto opcional no estoque, com ícone padrão quando não houver imagem.

@@ -8,6 +8,7 @@ import { calculateShopeeFee, roundMoney } from "@/lib/shopee";
 import { initialActionState, type ActionState, type ProductRow, type ProductVariationRow } from "@/types/transaction";
 
 type ServerAction = (state: ActionState, formData: FormData) => Promise<ActionState>;
+type ProductSelectionDraft = { productId: string; variationId: string; quantity: string };
 
 export function StockManager({ products }: { products: ProductRow[] }) {
   const [editing, setEditing] = useState<ProductRow | null>(null);
@@ -194,17 +195,17 @@ export function StockManager({ products }: { products: ProductRow[] }) {
 
 function SellProductModal({ product, products, onClose }: { product: ProductRow; products: ProductRow[]; onClose: () => void }) {
   const [state, formAction, pending] = useActionState(sellProduct, initialActionState);
-  const [saleItems, setSaleItems] = useState<Array<{ productId: string; variationId: string; quantity: string }>>([
-    { productId: product.id.toString(), variationId: "", quantity: "1" },
-  ]);
+  const [saleItems, setSaleItems] = useState<ProductSelectionDraft[]>([{ productId: product.id.toString(), variationId: "", quantity: "1" }]);
+  const [giftItems, setGiftItems] = useState<ProductSelectionDraft[]>([]);
   const [platform, setPlatform] = useState("PERSONAL");
   const [discountType, setDiscountType] = useState("NONE");
   const [discountValue, setDiscountValue] = useState("");
   const [finalValue, setFinalValue] = useState("");
+  const [pickingSaleItemIndex, setPickingSaleItemIndex] = useState<number | null>(null);
+  const [pickingGiftItemIndex, setPickingGiftItemIndex] = useState<number | null>(null);
 
-  const validSaleItems = saleItems
-    .filter((item) => item.productId && Number(item.quantity) > 0)
-    .map((item) => ({ productId: Number(item.productId), variationId: item.variationId ? Number(item.variationId) : null, quantity: Number(item.quantity) }));
+  const validSaleItems = toValidSelectionItems(saleItems);
+  const validGiftItems = toValidSelectionItems(giftItems);
   const soldQuantity = validSaleItems.reduce((total, item) => total + item.quantity, 0);
   const grossValue = roundMoney(
     validSaleItems.reduce((total, item) => {
@@ -220,7 +221,11 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
   const itemValueBeforeFee = soldQuantity > 0 ? roundMoney(valueBeforeFee / soldQuantity) : 0;
   const platformFee = platform === "SHOPEE" ? calculateShopeeFee(itemValueBeforeFee, soldQuantity) : 0;
   const netValue = roundMoney(Math.max(valueBeforeFee - platformFee, 0));
+  const saleManufacturingCost = calculateSelectionManufacturingCost(validSaleItems, products);
+  const giftManufacturingCost = calculateSelectionManufacturingCost(validGiftItems, products);
+  const totalManufacturingCost = roundMoney(saleManufacturingCost + giftManufacturingCost);
   const serializedItems = JSON.stringify(validSaleItems);
+  const serializedGiftItems = JSON.stringify(validGiftItems);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
@@ -238,12 +243,16 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
 
         <form action={formAction} className="space-y-5">
           <input type="hidden" name="items" value={serializedItems} />
+          <input type="hidden" name="giftItems" value={serializedGiftItems} />
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-semibold text-slate-950">Itens da venda</h3>
               <button
                 type="button"
-                onClick={() => setSaleItems((current) => [...current, { productId: "", variationId: "", quantity: "1" }])}
+                onClick={() => {
+                  setSaleItems((current) => [...current, { productId: "", variationId: "", quantity: "1" }]);
+                  setPickingSaleItemIndex(saleItems.length);
+                }}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
               >
                 Adicionar produto
@@ -254,22 +263,20 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
 
               return (
                 <div key={index} className="grid gap-3 md:grid-cols-[1fr_180px_130px_auto]">
-                  <select
-                    value={item.productId}
-                    onChange={(event) =>
-                      setSaleItems((current) =>
-                        current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, productId: event.target.value, variationId: "" } : currentItem))
-                      )
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-slate-950"
+                  <button
+                    type="button"
+                    onClick={() => setPickingSaleItemIndex(index)}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm outline-none hover:bg-slate-100 focus:border-slate-950"
                   >
-                    <option value="">Selecione um produto ou kit</option>
-                    {products.map((currentProduct) => (
-                      <option key={currentProduct.id} value={currentProduct.id}>
-                        {currentProduct.sku} - {currentProduct.name}{currentProduct.isKit ? " (kit)" : ""} | Estoque: {currentProduct.quantity}
-                      </option>
-                    ))}
-                  </select>
+                    {selectedProduct ? (
+                      <span>
+                        <strong className="text-slate-950">{selectedProduct.sku}</strong> - {selectedProduct.name}
+                        {selectedProduct.isKit ? " (kit)" : ""} | Estoque: {selectedProduct.quantity}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">Escolher produto ou kit</span>
+                    )}
+                  </button>
                   <select
                     value={item.variationId}
                     onChange={(event) =>
@@ -309,6 +316,114 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
               );
             })}
           </div>
+          {pickingSaleItemIndex !== null ? (
+            <ProductPickerModal
+              title="Escolher item da venda"
+              products={products}
+              onClose={() => setPickingSaleItemIndex(null)}
+              onSelect={(selectedProduct) => {
+                setSaleItems((current) =>
+                  current.map((item, index) =>
+                    index === pickingSaleItemIndex ? { ...item, productId: selectedProduct.id.toString(), variationId: "" } : item
+                  )
+                );
+                setPickingSaleItemIndex(null);
+              }}
+            />
+          ) : null}
+          <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-slate-950">Brindes</h3>
+                <p className="text-xs text-slate-600">Baixam do estoque, mas não entram no valor da venda.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setGiftItems((current) => [...current, { productId: "", variationId: "", quantity: "1" }]);
+                  setPickingGiftItemIndex(giftItems.length);
+                }}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+              >
+                Adicionar brinde
+              </button>
+            </div>
+            {giftItems.length === 0 ? (
+              <p className="text-sm text-slate-600">Nenhum brinde adicionado.</p>
+            ) : (
+              giftItems.map((item, index) => {
+                const selectedProduct = products.find((currentProduct) => currentProduct.id === Number(item.productId));
+
+                return (
+                  <div key={index} className="grid gap-3 md:grid-cols-[1fr_180px_130px_auto]">
+                    <button
+                      type="button"
+                      onClick={() => setPickingGiftItemIndex(index)}
+                      className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-sm outline-none hover:bg-amber-100 focus:border-amber-700"
+                    >
+                      {selectedProduct ? (
+                        <span>
+                          <strong className="text-slate-950">{selectedProduct.sku}</strong> - {selectedProduct.name}
+                          {selectedProduct.isKit ? " (kit)" : ""} | Estoque: {selectedProduct.quantity}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500">Escolher produto ou kit</span>
+                      )}
+                    </button>
+                    <select
+                      value={item.variationId}
+                      onChange={(event) =>
+                        setGiftItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, variationId: event.target.value } : currentItem)))
+                      }
+                      disabled={!selectedProduct || selectedProduct.variations.length === 0}
+                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 outline-none focus:border-amber-700 disabled:bg-amber-100"
+                    >
+                      <option value="">Sem variação</option>
+                      {selectedProduct?.variations.map((variation) => (
+                        <option key={variation.id} value={variation.id}>
+                          {variation.name} | Estoque: {variation.quantity}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min="1"
+                      max={item.variationId ? selectedProduct?.variations.find((variation) => variation.id === Number(item.variationId))?.quantity : selectedProduct?.quantity}
+                      step="1"
+                      value={item.quantity}
+                      onChange={(event) =>
+                        setGiftItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, quantity: event.target.value } : currentItem)))
+                      }
+                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 outline-none focus:border-amber-700"
+                      placeholder="Qtd."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setGiftItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          {pickingGiftItemIndex !== null ? (
+            <ProductPickerModal
+              title="Escolher brinde"
+              products={products}
+              onClose={() => setPickingGiftItemIndex(null)}
+              onSelect={(selectedProduct) => {
+                setGiftItems((current) =>
+                  current.map((item, index) =>
+                    index === pickingGiftItemIndex ? { ...item, productId: selectedProduct.id.toString(), variationId: "" } : item
+                  )
+                );
+                setPickingGiftItemIndex(null);
+              }}
+            />
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Data da venda" error={state.errors?.date?.[0]}>
               <input
@@ -370,6 +485,9 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
             <p>Desconto aplicado: <strong>{formatCurrency(discount)}</strong></p>
             <p>Taxa da plataforma: <strong>{formatCurrency(platformFee)}</strong></p>
             <p>Valor líquido da venda: <strong>{formatCurrency(netValue)}</strong></p>
+            <p>Custo fabricação itens: <strong>{formatCurrency(saleManufacturingCost)}</strong></p>
+            <p>Custo fabricação brindes: <strong>{formatCurrency(giftManufacturingCost)}</strong></p>
+            <p className="sm:col-span-2">Custo fabricação total: <strong>{formatCurrency(totalManufacturingCost)}</strong></p>
           </div>
 
           {platform === "SHOPEE" ? (
@@ -519,6 +637,109 @@ function DefaultProductIcon({ label }: { label: string }) {
   );
 }
 
+function ProductPickerModal({
+  title,
+  products,
+  onSelect,
+  onClose,
+}: {
+  title: string;
+  products: ProductRow[];
+  onSelect: (product: ProductRow) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const filteredProducts = products.filter((product) => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    return (
+      product.name.toLowerCase().includes(normalizedSearch) ||
+      product.sku.toLowerCase().includes(normalizedSearch) ||
+      product.variations.some((variation) => variation.name.toLowerCase().includes(normalizedSearch) || variation.sku.toLowerCase().includes(normalizedSearch))
+    );
+  });
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4">
+      <section className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="border-b border-slate-200 p-5">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-wide text-slate-500">Selecionar item</p>
+              <h2 className="text-2xl font-bold text-slate-950">{title}</h2>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+              Fechar
+            </button>
+          </div>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+            placeholder="Buscar por nome, SKU ou variação"
+            autoFocus
+          />
+        </div>
+        <div className="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto">
+          {filteredProducts.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum item encontrado.</p>
+          ) : (
+            filteredProducts.map((product) => (
+              <button key={product.id} type="button" onClick={() => onSelect(product)} className="block w-full px-5 py-4 text-left hover:bg-slate-50">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <ProductPickerThumbnail product={product} />
+                    <div>
+                      <p className="font-semibold text-slate-950">
+                        {product.name} {product.isKit ? <span className="text-xs uppercase text-blue-700">Kit</span> : null}
+                      </p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">SKU: {product.sku}</p>
+                      {product.variations.length > 0 ? (
+                        <p className="text-xs text-slate-500">
+                          Variações: {product.variations.map((variation) => variation.name).join(", ")}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-600 sm:text-right">
+                    <p>Estoque: {product.quantity}</p>
+                    <p>{formatCurrency(product.saleValue)}</p>
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProductPickerThumbnail({ product }: { product: ProductRow }) {
+  const componentImage = product.components.find((component) => component.photoUrl);
+  const photoUrl = product.photoUrl || componentImage?.photoUrl;
+
+  return (
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-400">
+      {photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photoUrl} alt={product.name} className="h-full w-full object-cover" />
+      ) : (
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-7 w-7">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+          <path d="m3.3 7 8.7 5 8.7-5" />
+          <path d="M12 22V12" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
 function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () => void }) {
   const [state, formAction, pending] = useActionState(createKit, initialActionState);
   const [sku, setSku] = useState("");
@@ -532,6 +753,7 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
   const [components, setComponents] = useState<Array<{ componentId: string; variationId: string; quantity: string }>>([
     { componentId: "", variationId: "", quantity: "1" },
   ]);
+  const [pickingComponentIndex, setPickingComponentIndex] = useState<number | null>(null);
 
   const suggestedManufacturingValue = roundMoney(
     components.reduce((total, component) => {
@@ -613,9 +835,12 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
         <div className="space-y-3 rounded-2xl border border-blue-200 bg-white p-4">
           <div className="flex items-center justify-between gap-3">
             <h3 className="font-semibold text-slate-950">Itens que compõem o kit</h3>
-            <button
-              type="button"
-              onClick={() => setComponents((current) => [...current, { componentId: "", variationId: "", quantity: "1" }])}
+              <button
+                type="button"
+              onClick={() => {
+                setComponents((current) => [...current, { componentId: "", variationId: "", quantity: "1" }]);
+                setPickingComponentIndex(components.length);
+              }}
               className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
             >
               Adicionar item
@@ -630,20 +855,20 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
 
               return (
               <div key={index} className="grid gap-3 md:grid-cols-[1fr_180px_140px_auto]">
-                <select
-                  value={component.componentId}
-                  onChange={(event) =>
-                    setComponents((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, componentId: event.target.value, variationId: "" } : item)))
-                  }
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+                <button
+                  type="button"
+                  onClick={() => setPickingComponentIndex(index)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm outline-none hover:bg-slate-100 focus:border-slate-950"
                 >
-                  <option value="">Selecione um produto ou kit</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.sku} - {product.name}{product.isKit ? " (kit)" : ""}
-                    </option>
-                  ))}
-                </select>
+                  {selectedProduct ? (
+                    <span>
+                      <strong className="text-slate-950">{selectedProduct.sku}</strong> - {selectedProduct.name}
+                      {selectedProduct.isKit ? " (kit)" : ""}
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">Escolher produto ou kit</span>
+                  )}
+                </button>
                 <select
                   value={component.variationId}
                   onChange={(event) =>
@@ -682,6 +907,21 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
               );
             })
           )}
+          {pickingComponentIndex !== null ? (
+            <ProductPickerModal
+              title="Escolher item do kit"
+              products={products}
+              onClose={() => setPickingComponentIndex(null)}
+              onSelect={(selectedProduct) => {
+                setComponents((current) =>
+                  current.map((item, index) =>
+                    index === pickingComponentIndex ? { ...item, componentId: selectedProduct.id.toString(), variationId: "" } : item
+                  )
+                );
+                setPickingComponentIndex(null);
+              }}
+            />
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
@@ -876,6 +1116,26 @@ function calculateDiscount(grossValue: number, discountType: string, discountVal
   }
 
   return 0;
+}
+
+function toValidSelectionItems(items: ProductSelectionDraft[]) {
+  return items
+    .filter((item) => item.productId && Number(item.quantity) > 0)
+    .map((item) => ({ productId: Number(item.productId), variationId: item.variationId ? Number(item.variationId) : null, quantity: Number(item.quantity) }));
+}
+
+function calculateSelectionManufacturingCost(
+  items: Array<{ productId: number; variationId: number | null; quantity: number }>,
+  products: ProductRow[]
+) {
+  return roundMoney(
+    items.reduce((total, item) => {
+      const selectedProduct = products.find((currentProduct) => currentProduct.id === item.productId);
+      const selectedVariation = selectedProduct?.variations.find((variation) => variation.id === item.variationId);
+
+      return total + (selectedProduct ? Number(selectedVariation?.manufacturingValue ?? selectedProduct.manufacturingValue) * item.quantity : 0);
+    }, 0)
+  );
 }
 
 function parseMoney(value: string) {

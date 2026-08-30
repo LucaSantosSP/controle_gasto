@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { calculateShopeeFee, roundMoney } from "@/lib/shopee";
-import { parseKitComponents, parseProductFormData, parseProductVariationFormData, parseSaleItems, parseSellProductFormData } from "@/lib/validation";
+import { parseKitComponents, parseOptionalSaleItems, parseProductFormData, parseProductVariationFormData, parseSaleItems, parseSellProductFormData } from "@/lib/validation";
 import type { ActionState } from "@/types/transaction";
 
 export async function createProduct(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -286,6 +286,7 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
 export async function sellProduct(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = parseSellProductFormData(formData);
   const parsedItems = parseSaleItems(formData.get("items"));
+  const parsedGiftItems = parseOptionalSaleItems(formData.get("giftItems"));
 
   if (!parsed.success) {
     return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
@@ -293,6 +294,10 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
 
   if (!parsedItems.success) {
     return { ok: false, message: parsedItems.message };
+  }
+
+  if (!parsedGiftItems.success) {
+    return { ok: false, message: parsedGiftItems.message };
   }
 
   try {
@@ -309,6 +314,8 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
       prisma.productComponent.findMany({ select: { kitId: true, componentId: true, variationId: true, quantity: true } }),
     ]);
     const saleItems = mergeSaleItems(parsedItems.data);
+    const giftItems = mergeSaleItems(parsedGiftItems.data);
+    const stockItems = mergeSaleItems([...saleItems, ...giftItems]);
     const selectedProducts = saleItems.map((item) => {
       const product = allProducts.find((currentProduct) => currentProduct.id === item.productId);
 
@@ -324,9 +331,10 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
 
       return { ...product, selectedVariation: variation, saleQuantity: item.quantity };
     });
+    validateSaleItems(giftItems, allProducts);
     const requiredQuantities = new Map<string, { productId: number; variationId: number | null; quantity: number }>();
 
-    for (const item of saleItems) {
+    for (const item of stockItems) {
       const itemRequiredQuantities = calculateRequiredQuantities(item.productId, item.variationId ?? null, item.quantity, allComponents);
 
       for (const movement of itemRequiredQuantities.values()) {
@@ -396,6 +404,23 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
     return { ok: true, message: "Venda lançada com sucesso." };
   } catch {
     return { ok: false, message: "Não foi possível lançar a venda." };
+  }
+}
+
+function validateSaleItems(
+  items: Array<{ productId: number; variationId: number | null; quantity: number }>,
+  products: Array<{ id: number; variations: Array<{ id: number }> }>
+) {
+  for (const item of items) {
+    const product = products.find((currentProduct) => currentProduct.id === item.productId);
+
+    if (!product) {
+      throw new Error("Produto não encontrado.");
+    }
+
+    if (item.variationId && !product.variations.some((variation) => variation.id === item.variationId)) {
+      throw new Error("Variação não encontrada.");
+    }
   }
 }
 

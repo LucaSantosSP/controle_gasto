@@ -173,6 +173,25 @@ export function parseSaleItems(value: FormDataEntryValue | null) {
   }
 }
 
+export function parseOptionalSaleItems(value: FormDataEntryValue | null) {
+  if (typeof value !== "string" || !value.trim()) {
+    return { success: true as const, data: [] };
+  }
+
+  try {
+    const parsedJson = JSON.parse(value) as unknown;
+    const parsed = z.array(saleItemSchema).safeParse(parsedJson);
+
+    if (!parsed.success) {
+      return { success: false as const, message: "Confira os itens de brinde." };
+    }
+
+    return { success: true as const, data: parsed.data };
+  } catch {
+    return { success: false as const, message: "Confira os itens de brinde." };
+  }
+}
+
 export function parseKitComponents(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !value.trim()) {
     return { success: false as const, message: "Adicione pelo menos um item ao kit." };
