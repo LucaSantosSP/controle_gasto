@@ -262,57 +262,20 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
               const selectedProduct = products.find((currentProduct) => currentProduct.id === Number(item.productId));
 
               return (
-                <div key={index} className="grid gap-3 md:grid-cols-[1fr_180px_130px_auto]">
-                  <button
-                    type="button"
-                    onClick={() => setPickingSaleItemIndex(index)}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm outline-none hover:bg-slate-100 focus:border-slate-950"
-                  >
-                    {selectedProduct ? (
-                      <span>
-                        <strong className="text-slate-950">{selectedProduct.sku}</strong> - {selectedProduct.name}
-                        {selectedProduct.isKit ? " (kit)" : ""} | Estoque: {selectedProduct.quantity}
-                      </span>
-                    ) : (
-                      <span className="text-slate-500">Escolher produto ou kit</span>
-                    )}
-                  </button>
-                  <select
-                    value={item.variationId}
-                    onChange={(event) =>
-                      setSaleItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, variationId: event.target.value } : currentItem)))
-                    }
-                    disabled={!selectedProduct || selectedProduct.variations.length === 0}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-slate-950 disabled:bg-slate-100"
-                  >
-                    <option value="">Sem variação</option>
-                    {selectedProduct?.variations.map((variation) => (
-                      <option key={variation.id} value={variation.id}>
-                        {variation.name} | Estoque: {variation.quantity}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min="1"
-                    max={item.variationId ? selectedProduct?.variations.find((variation) => variation.id === Number(item.variationId))?.quantity : selectedProduct?.quantity}
-                    step="1"
-                    value={item.quantity}
-                    onChange={(event) =>
-                      setSaleItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, quantity: event.target.value } : currentItem)))
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-slate-950"
-                    placeholder="Qtd."
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSaleItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                    disabled={saleItems.length === 1}
-                    className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Remover
-                  </button>
-                </div>
+                <SelectionItemCard
+                  key={index}
+                  item={item}
+                  selectedProduct={selectedProduct}
+                  onPick={() => setPickingSaleItemIndex(index)}
+                  onVariationChange={(variationId) =>
+                    setSaleItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, variationId } : currentItem)))
+                  }
+                  onQuantityChange={(quantity) =>
+                    setSaleItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, quantity } : currentItem)))
+                  }
+                  onRemove={() => setSaleItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  disableRemove={saleItems.length === 1}
+                />
               );
             })}
           </div>
@@ -355,56 +318,20 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
                 const selectedProduct = products.find((currentProduct) => currentProduct.id === Number(item.productId));
 
                 return (
-                  <div key={index} className="grid gap-3 md:grid-cols-[1fr_180px_130px_auto]">
-                    <button
-                      type="button"
-                      onClick={() => setPickingGiftItemIndex(index)}
-                      className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-sm outline-none hover:bg-amber-100 focus:border-amber-700"
-                    >
-                      {selectedProduct ? (
-                        <span>
-                          <strong className="text-slate-950">{selectedProduct.sku}</strong> - {selectedProduct.name}
-                          {selectedProduct.isKit ? " (kit)" : ""} | Estoque: {selectedProduct.quantity}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500">Escolher produto ou kit</span>
-                      )}
-                    </button>
-                    <select
-                      value={item.variationId}
-                      onChange={(event) =>
-                        setGiftItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, variationId: event.target.value } : currentItem)))
-                      }
-                      disabled={!selectedProduct || selectedProduct.variations.length === 0}
-                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 outline-none focus:border-amber-700 disabled:bg-amber-100"
-                    >
-                      <option value="">Sem variação</option>
-                      {selectedProduct?.variations.map((variation) => (
-                        <option key={variation.id} value={variation.id}>
-                          {variation.name} | Estoque: {variation.quantity}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      min="1"
-                      max={item.variationId ? selectedProduct?.variations.find((variation) => variation.id === Number(item.variationId))?.quantity : selectedProduct?.quantity}
-                      step="1"
-                      value={item.quantity}
-                      onChange={(event) =>
-                        setGiftItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, quantity: event.target.value } : currentItem)))
-                      }
-                      className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 outline-none focus:border-amber-700"
-                      placeholder="Qtd."
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setGiftItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                      className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
-                    >
-                      Remover
-                    </button>
-                  </div>
+                  <SelectionItemCard
+                    key={index}
+                    item={item}
+                    selectedProduct={selectedProduct}
+                    onPick={() => setPickingGiftItemIndex(index)}
+                    onVariationChange={(variationId) =>
+                      setGiftItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, variationId } : currentItem)))
+                    }
+                    onQuantityChange={(quantity) =>
+                      setGiftItems((current) => current.map((currentItem, itemIndex) => (itemIndex === index ? { ...currentItem, quantity } : currentItem)))
+                    }
+                    onRemove={() => setGiftItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    accent="amber"
+                  />
                 );
               })
             )}
@@ -510,6 +437,83 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
           </div>
         </form>
       </section>
+    </div>
+  );
+}
+
+function SelectionItemCard({
+  item,
+  selectedProduct,
+  onPick,
+  onVariationChange,
+  onQuantityChange,
+  onRemove,
+  disableRemove,
+  accent = "slate",
+}: {
+  item: ProductSelectionDraft;
+  selectedProduct?: ProductRow;
+  onPick: () => void;
+  onVariationChange: (variationId: string) => void;
+  onQuantityChange: (quantity: string) => void;
+  onRemove: () => void;
+  disableRemove?: boolean;
+  accent?: "slate" | "amber";
+}) {
+  const borderClass = accent === "amber" ? "border-amber-200" : "border-slate-200";
+  const controlClass = accent === "amber" ? "border-amber-300 focus:border-amber-700 disabled:bg-amber-100" : "border-slate-300 focus:border-slate-950 disabled:bg-slate-100";
+  const hoverClass = accent === "amber" ? "hover:bg-amber-50" : "hover:bg-slate-50";
+  const quantityLimit = item.variationId ? selectedProduct?.variations.find((variation) => variation.id === Number(item.variationId))?.quantity : selectedProduct?.quantity;
+
+  return (
+    <div className={`space-y-3 rounded-xl border ${borderClass} bg-white p-3 shadow-sm`}>
+      <button
+        type="button"
+        onClick={onPick}
+        className={`w-full rounded-lg border ${controlClass} px-3 py-2 text-left text-sm outline-none ${hoverClass}`}
+      >
+        {selectedProduct ? (
+          <span className="block leading-relaxed">
+            <strong className="text-slate-950">{selectedProduct.sku}</strong> - {selectedProduct.name}
+            {selectedProduct.isKit ? " (kit)" : ""} | Estoque: {selectedProduct.quantity}
+          </span>
+        ) : (
+          <span className="text-slate-500">Escolher produto ou kit</span>
+        )}
+      </button>
+      <div className="grid gap-3 sm:grid-cols-[1fr_110px_auto]">
+        <select
+          value={item.variationId}
+          onChange={(event) => onVariationChange(event.target.value)}
+          disabled={!selectedProduct || selectedProduct.variations.length === 0}
+          className={`w-full rounded-lg border ${controlClass} bg-white px-3 py-2 outline-none`}
+        >
+          <option value="">Sem variação</option>
+          {selectedProduct?.variations.map((variation) => (
+            <option key={variation.id} value={variation.id}>
+              {variation.name} | Estoque: {variation.quantity}
+            </option>
+          ))}
+        </select>
+        <input
+          type="number"
+          min="1"
+          max={quantityLimit}
+          step="1"
+          value={item.quantity}
+          onChange={(event) => onQuantityChange(event.target.value)}
+          className={`w-full rounded-lg border ${controlClass} bg-white px-3 py-2 outline-none`}
+          placeholder="Qtd."
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disableRemove}
+          className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Remover
+        </button>
+      </div>
     </div>
   );
 }
