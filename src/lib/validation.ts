@@ -71,6 +71,8 @@ export const productVariationSchema = z.object({
   productId: z.coerce.number({ error: "Produto inválido." }).int().positive("Produto inválido."),
   sku: z.string().trim().max(100, "O SKU deve ter no máximo 100 caracteres.").optional(),
   name: z.string().trim().min(1, "Informe o nome da variação."),
+  variationType: z.string().trim().max(100, "O tipo da variação deve ter no máximo 100 caracteres."),
+  variationValue: z.string().trim().max(255, "O valor da variação deve ter no máximo 255 caracteres."),
   quantity: z.coerce
     .number({ error: "Informe a quantidade." })
     .int("A quantidade deve ser um número inteiro.")
@@ -137,6 +139,8 @@ export function parseProductVariationFormData(formData: FormData) {
     productId: formData.get("productId"),
     sku: formData.get("sku") || undefined,
     name: formData.get("name"),
+    variationType: formData.get("variationType"),
+    variationValue: formData.get("variationValue"),
     quantity: formData.get("quantity"),
     soldQuantity: formData.get("soldQuantity"),
     manufacturingValue: formData.get("manufacturingValue"),

@@ -19,7 +19,7 @@ export async function Nav() {
     prisma.productVariation.findMany({
       where: { quantity: 0 },
       orderBy: [{ product: { sku: "asc" } }, { name: "asc" }],
-      select: { id: true, sku: true, name: true, product: { select: { sku: true, name: true } } },
+      select: { id: true, sku: true, name: true, variationType: true, variationValue: true, product: { select: { sku: true, name: true } } },
     }),
   ]);
   const outOfStockItems = [
@@ -27,7 +27,7 @@ export async function Nav() {
     ...outOfStockVariations.map((variation) => ({
       id: `variation-${variation.id}`,
       sku: variation.sku || variation.product.sku,
-      name: `${variation.product.name} - ${variation.name}`,
+      name: `${variation.product.name} - ${formatVariationLabel(variation)}`,
       type: "variation" as const,
     })),
   ];
@@ -71,4 +71,10 @@ export async function Nav() {
       </div>
     </header>
   );
+}
+
+function formatVariationLabel(variation: { name: string; variationType: string; variationValue: string }) {
+  const typeValue = [variation.variationType, variation.variationValue].filter(Boolean).join(": ");
+
+  return typeValue ? `${variation.name} (${typeValue})` : variation.name;
 }

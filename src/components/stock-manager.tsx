@@ -122,7 +122,7 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                         {product.variations.map((variation) => (
                           <div key={variation.id} className="flex flex-wrap items-center justify-between gap-2">
                             <p className={variation.quantity <= 0 ? "font-semibold text-red-700" : ""}>
-                              {variation.name}: estoque {variation.quantity}, venda {formatCurrency(variation.saleValue)}
+                              {formatVariationLabel(variation)}: estoque {variation.quantity}, venda {formatCurrency(variation.saleValue)}
                               {variation.quantity <= 0 ? " | Sem estoque" : ""}
                             </p>
                             <button
@@ -491,7 +491,7 @@ function SelectionItemCard({
           <option value="">Sem variação</option>
           {selectedProduct?.variations.map((variation) => (
             <option key={variation.id} value={variation.id}>
-              {variation.name} | Estoque: {variation.quantity}
+              {formatVariationLabel(variation)} | Estoque: {variation.quantity}
             </option>
           ))}
         </select>
@@ -522,6 +522,8 @@ function VariationModal({ product, variation, onClose }: { product: ProductRow; 
   const [state, formAction, pending] = useActionState(variation ? updateVariation : createVariation, initialActionState);
   const [sku, setSku] = useState(variation?.sku ?? "");
   const [name, setName] = useState(variation?.name ?? "");
+  const [variationType, setVariationType] = useState(variation?.variationType ?? "");
+  const [variationValue, setVariationValue] = useState(variation?.variationValue ?? "");
   const [quantity, setQuantity] = useState(variation?.quantity.toString() ?? "0");
   const [soldQuantity, setSoldQuantity] = useState(variation?.soldQuantity.toString() ?? "0");
   const [manufacturingValue, setManufacturingValue] = useState(variation ? toMoneyInput(variation.manufacturingValue) : toMoneyInput(product.manufacturingValue));
@@ -554,6 +556,26 @@ function VariationModal({ product, variation, onClose }: { product: ProductRow; 
             </Field>
             <Field label="Nome da variação" error={state.errors?.name?.[0]}>
               <input name="name" required value={name} onChange={(event) => setName(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="Ex.: Azul, 500g" />
+            </Field>
+            <Field label="Tipo da variação" error={state.errors?.variationType?.[0]}>
+              <input
+                name="variationType"
+                maxLength={100}
+                value={variationType}
+                onChange={(event) => setVariationType(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+                placeholder="Ex.: Cor, tamanho, peso"
+              />
+            </Field>
+            <Field label="Valor da variação" error={state.errors?.variationValue?.[0]}>
+              <input
+                name="variationValue"
+                maxLength={255}
+                value={variationValue}
+                onChange={(event) => setVariationValue(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+                placeholder="Ex.: Azul, P, 500g"
+              />
             </Field>
             <Field label="Quantidade" error={state.errors?.quantity?.[0]}>
               <input name="quantity" type="number" min="0" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" />
@@ -663,7 +685,13 @@ function ProductPickerModal({
     return (
       product.name.toLowerCase().includes(normalizedSearch) ||
       product.sku.toLowerCase().includes(normalizedSearch) ||
-      product.variations.some((variation) => variation.name.toLowerCase().includes(normalizedSearch) || variation.sku.toLowerCase().includes(normalizedSearch))
+      product.variations.some(
+        (variation) =>
+          variation.name.toLowerCase().includes(normalizedSearch) ||
+          variation.sku.toLowerCase().includes(normalizedSearch) ||
+          variation.variationType.toLowerCase().includes(normalizedSearch) ||
+          variation.variationValue.toLowerCase().includes(normalizedSearch)
+      )
     );
   });
 
@@ -705,7 +733,7 @@ function ProductPickerModal({
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">SKU: {product.sku}</p>
                       {product.variations.length > 0 ? (
                         <p className="text-xs text-slate-500">
-                          Variações: {product.variations.map((variation) => variation.name).join(", ")}
+                          Variações: {product.variations.map(formatVariationLabel).join(", ")}
                         </p>
                       ) : null}
                     </div>
@@ -742,6 +770,12 @@ function ProductPickerThumbnail({ product }: { product: ProductRow }) {
       )}
     </div>
   );
+}
+
+function formatVariationLabel(variation: Pick<ProductVariationRow, "name" | "variationType" | "variationValue">) {
+  const typeValue = [variation.variationType, variation.variationValue].filter(Boolean).join(": ");
+
+  return typeValue ? `${variation.name} (${typeValue})` : variation.name;
 }
 
 function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () => void }) {
@@ -884,7 +918,7 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
                   <option value="">Sem variação</option>
                   {selectedProduct?.variations.map((variation) => (
                     <option key={variation.id} value={variation.id}>
-                      {variation.name}
+                      {formatVariationLabel(variation)}
                     </option>
                   ))}
                 </select>

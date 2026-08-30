@@ -37,6 +37,8 @@ export type ProductVariationRow = {
   id: number;
   sku: string;
   name: string;
+  variationType: string;
+  variationValue: string;
   quantity: number;
   soldQuantity: number;
   manufacturingValue: string;

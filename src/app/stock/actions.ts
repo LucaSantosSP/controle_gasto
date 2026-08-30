@@ -168,6 +168,8 @@ export async function createVariation(_: ActionState, formData: FormData): Promi
         productId: parsed.data.productId,
         sku: parsed.data.sku || null,
         name: parsed.data.name,
+        variationType: parsed.data.variationType,
+        variationValue: parsed.data.variationValue,
         quantity: parsed.data.quantity,
         soldQuantity: parsed.data.soldQuantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
@@ -205,6 +207,8 @@ export async function updateVariation(_: ActionState, formData: FormData): Promi
         productId: parsed.data.productId,
         sku: parsed.data.sku || null,
         name: parsed.data.name,
+        variationType: parsed.data.variationType,
+        variationValue: parsed.data.variationValue,
         quantity: parsed.data.quantity,
         soldQuantity: parsed.data.soldQuantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
@@ -308,7 +312,7 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
           quantity: true,
           name: true,
           saleValue: true,
-          variations: { select: { id: true, productId: true, quantity: true, name: true, saleValue: true } },
+          variations: { select: { id: true, productId: true, quantity: true, name: true, variationType: true, variationValue: true, saleValue: true } },
         },
       }),
       prisma.productComponent.findMany({ select: { kitId: true, componentId: true, variationId: true, quantity: true } }),
@@ -361,7 +365,7 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
     const platformFeeValue = parsed.data.platform === "SHOPEE" ? calculateShopeeFee(unitValueBeforeFee, soldQuantity) : 0;
     const totalValue = roundMoney(Math.max(saleValueBeforeFee - platformFeeValue, 0));
     const saleName = selectedProducts
-      .map((product) => `${product.saleQuantity}x ${product.name}${product.selectedVariation ? ` - ${product.selectedVariation.name}` : ""}`)
+      .map((product) => `${product.saleQuantity}x ${product.name}${product.selectedVariation ? ` - ${formatVariationLabel(product.selectedVariation)}` : ""}`)
       .join(" + ");
 
     await prisma.$transaction([
@@ -546,7 +550,7 @@ function findUnavailableStock(
     id: number;
     name: string;
     quantity: number;
-    variations: Array<{ id: number; name: string; quantity: number }>;
+    variations: Array<{ id: number; name: string; variationType: string; variationValue: string; quantity: number }>;
   }>
 ) {
   for (const movement of required.values()) {
@@ -556,11 +560,17 @@ function findUnavailableStock(
     if ((stockQuantity ?? 0) < movement.quantity) {
       const variation = movement.variationId ? product?.variations.find((item) => item.id === movement.variationId) : null;
 
-      return { name: variation ? `${product?.name} - ${variation.name}` : product?.name ?? "produto" };
+      return { name: variation ? `${product?.name} - ${formatVariationLabel(variation)}` : product?.name ?? "produto" };
     }
   }
 
   return null;
+}
+
+function formatVariationLabel(variation: { name: string; variationType: string; variationValue: string }) {
+  const typeValue = [variation.variationType, variation.variationValue].filter(Boolean).join(": ");
+
+  return typeValue ? `${variation.name} (${typeValue})` : variation.name;
 }
 
 function movementKey(productId: number, variationId: number | null) {

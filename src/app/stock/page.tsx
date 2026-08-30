@@ -31,6 +31,8 @@ export default async function StockPage() {
           id: variation.id,
           sku: variation.sku ?? "",
           name: variation.name,
+          variationType: variation.variationType,
+          variationValue: variation.variationValue,
           quantity: variation.quantity,
           soldQuantity: variation.soldQuantity,
           manufacturingValue: variation.manufacturingValue.toString(),
@@ -40,7 +42,9 @@ export default async function StockPage() {
           componentId: component.componentId,
           variationId: component.variationId,
           sku: component.component.sku,
-          name: component.variation ? `${component.component.name} - ${component.variation.name}` : component.component.name,
+          name: component.variation
+            ? `${component.component.name} - ${formatVariationLabel(component.variation)}`
+            : component.component.name,
           quantity: component.quantity,
           isKit: component.component.isKit,
           photoUrl: component.component.photoUrl,
@@ -48,4 +52,10 @@ export default async function StockPage() {
       }))}
     />
   );
+}
+
+function formatVariationLabel(variation: { name: string; variationType: string; variationValue: string }) {
+  const typeValue = [variation.variationType, variation.variationValue].filter(Boolean).join(": ");
+
+  return typeValue ? `${variation.name} (${typeValue})` : variation.name;
 }
