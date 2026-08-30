@@ -15,6 +15,7 @@ export function StockManager({ products }: { products: ProductRow[] }) {
   const [selling, setSelling] = useState<ProductRow | null>(null);
   const [addingVariation, setAddingVariation] = useState<ProductRow | null>(null);
   const [editingVariation, setEditingVariation] = useState<{ product: ProductRow; variationId: number } | null>(null);
+  const [viewingVariations, setViewingVariations] = useState<ProductRow | null>(null);
   const [creatingKit, setCreatingKit] = useState(false);
   const [search, setSearch] = useState("");
   const filteredProducts = products.filter((product) => {
@@ -116,26 +117,19 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                     </div>
                   ) : null}
                   {product.variations.length > 0 ? (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                      <p className="mb-2 font-semibold text-slate-950">Variações</p>
-                      <div className="space-y-1">
-                        {product.variations.map((variation) => (
-                          <div key={variation.id} className="flex flex-wrap items-center justify-between gap-2">
-                            <p className={variation.quantity <= 0 ? "font-semibold text-red-700" : ""}>
-                              {formatVariationLabel(variation)}: estoque {variation.quantity}, venda {formatCurrency(variation.saleValue)}
-                              {variation.quantity <= 0 ? " | Sem estoque" : ""}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => setEditingVariation({ product, variationId: variation.id })}
-                              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                            >
-                              Editar
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setViewingVariations(product)}
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-left text-sm text-blue-950 hover:bg-blue-100"
+                    >
+                      <span>
+                        <strong>{product.variations.length} variação(ões)</strong>
+                        <span className="block text-xs text-blue-700">Clique para ver detalhes</span>
+                      </span>
+                      <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-blue-800">
+                        {product.variations.reduce((total, variation) => total + variation.quantity, 0)} em estoque
+                      </span>
+                    </button>
                   ) : null}
                   <div className="grid gap-2 text-sm sm:grid-cols-2">
                     <p className="rounded-lg bg-slate-100 px-3 py-2 text-slate-700">
@@ -180,6 +174,16 @@ export function StockManager({ products }: { products: ProductRow[] }) {
           </div>
         )}
       </section>
+      {viewingVariations ? (
+        <VariationsSummaryModal
+          product={viewingVariations}
+          onClose={() => setViewingVariations(null)}
+          onEdit={(variationId) => {
+            setEditingVariation({ product: viewingVariations, variationId });
+            setViewingVariations(null);
+          }}
+        />
+      ) : null}
       {selling ? <SellProductModal product={selling} products={products} onClose={() => setSelling(null)} /> : null}
       {addingVariation ? <VariationModal product={addingVariation} onClose={() => setAddingVariation(null)} /> : null}
       {editingVariation ? (
@@ -514,6 +518,52 @@ function SelectionItemCard({
           Remover
         </button>
       </div>
+    </div>
+  );
+}
+
+function VariationsSummaryModal({ product, onClose, onEdit }: { product: ProductRow; onClose: () => void; onEdit: (variationId: number) => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+      <section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-wide text-slate-500">Variações</p>
+            <h2 className="text-2xl font-bold text-slate-950">{product.name}</h2>
+            <p className="text-sm text-slate-500">SKU: {product.sku}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+            Fechar
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {product.variations.map((variation) => (
+            <article key={variation.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="font-semibold text-slate-950">{formatVariationLabel(variation)}</h3>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">SKU: {variation.sku || product.sku}</p>
+                  {variation.quantity <= 0 ? <p className="mt-1 text-sm font-semibold text-red-700">Sem estoque</p> : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onEdit(variation.id)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                >
+                  Editar
+                </button>
+              </div>
+              <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                <p className="rounded-lg bg-white px-3 py-2 text-slate-700">Estoque: <strong className="text-slate-950">{variation.quantity}</strong></p>
+                <p className="rounded-lg bg-white px-3 py-2 text-slate-700">Vendidos: <strong className="text-slate-950">{variation.soldQuantity}</strong></p>
+                <p className="rounded-lg bg-white px-3 py-2 text-slate-700">Fabricação: <strong className="text-slate-950">{formatCurrency(variation.manufacturingValue)}</strong></p>
+                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">Venda: <strong>{formatCurrency(variation.saleValue)}</strong></p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
