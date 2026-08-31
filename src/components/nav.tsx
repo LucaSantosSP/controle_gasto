@@ -10,25 +10,38 @@ const links = [
 ];
 
 export async function Nav() {
-  const [outOfStockProducts, outOfStockVariations] = await Promise.all([
+  const [stockAlertProducts, stockAlertVariations] = await Promise.all([
     prisma.product.findMany({
-      where: { quantity: 0 },
+      where: {
+        OR: [{ quantity: 0 }, { AND: [{ quantity: { gt: 0 } }, { minimumStock: { gt: 0 } }, { quantity: { lt: prisma.product.fields.minimumStock } }] }],
+      },
       orderBy: { sku: "asc" },
-      select: { id: true, sku: true, name: true },
+      select: { id: true, sku: true, name: true, quantity: true, minimumStock: true },
     }),
     prisma.productVariation.findMany({
-      where: { quantity: 0 },
+      where: {
+        OR: [{ quantity: 0 }, { AND: [{ quantity: { gt: 0 } }, { minimumStock: { gt: 0 } }, { quantity: { lt: prisma.productVariation.fields.minimumStock } }] }],
+      },
       orderBy: [{ product: { sku: "asc" } }, { name: "asc" }],
-      select: { id: true, sku: true, name: true, variationType: true, variationValue: true, product: { select: { sku: true, name: true } } },
+      select: { id: true, sku: true, name: true, variationType: true, variationValue: true, quantity: true, minimumStock: true, productId: true, product: { select: { sku: true, name: true } } },
     }),
   ]);
   const outOfStockItems = [
-    ...outOfStockProducts.map((product) => ({ id: `product-${product.id}`, sku: product.sku, name: product.name, type: "product" as const })),
-    ...outOfStockVariations.map((variation) => ({
+    ...stockAlertProducts.map((product) => ({
+      id: `product-${product.id}`,
+      href: `/stock?focusProduct=${product.id}#product-${product.id}`,
+      sku: product.sku,
+      name: product.name,
+      type: "product" as const,
+      status: product.quantity <= 0 ? "out" as const : "low" as const,
+    })),
+    ...stockAlertVariations.map((variation) => ({
       id: `variation-${variation.id}`,
+      href: `/stock?focusProduct=${variation.productId}&focusVariation=${variation.id}#product-${variation.productId}`,
       sku: variation.sku || variation.product.sku,
       name: `${variation.product.name} - ${formatVariationLabel(variation)}`,
       type: "variation" as const,
+      status: variation.quantity <= 0 ? "out" as const : "low" as const,
     })),
   ];
 

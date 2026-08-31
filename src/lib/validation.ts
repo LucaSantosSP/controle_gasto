@@ -27,6 +27,10 @@ export const productSchema = z.object({
     .number({ error: "Informe a quantidade." })
     .int("A quantidade deve ser um número inteiro.")
     .min(0, "A quantidade deve ser maior ou igual a zero."),
+  minimumStock: z.coerce
+    .number({ error: "Informe o estoque mínimo." })
+    .int("O estoque mínimo deve ser um número inteiro.")
+    .min(0, "O estoque mínimo deve ser maior ou igual a zero."),
   soldQuantity: z.coerce
     .number({ error: "Informe a quantidade vendida." })
     .int("A quantidade vendida deve ser um número inteiro.")
@@ -77,6 +81,10 @@ export const productVariationSchema = z.object({
     .number({ error: "Informe a quantidade." })
     .int("A quantidade deve ser um número inteiro.")
     .min(0, "A quantidade deve ser maior ou igual a zero."),
+  minimumStock: z.coerce
+    .number({ error: "Informe o estoque mínimo." })
+    .int("O estoque mínimo deve ser um número inteiro.")
+    .min(0, "O estoque mínimo deve ser maior ou igual a zero."),
   soldQuantity: z.coerce
     .number({ error: "Informe a quantidade vendida." })
     .int("A quantidade vendida deve ser um número inteiro.")
@@ -127,6 +135,7 @@ export function parseProductFormData(formData: FormData) {
     sku: formData.get("sku"),
     name: formData.get("name"),
     quantity: formData.get("quantity"),
+    minimumStock: formData.get("minimumStock"),
     soldQuantity: formData.get("soldQuantity"),
     manufacturingValue: formData.get("manufacturingValue"),
     saleValue: formData.get("saleValue"),
@@ -142,6 +151,7 @@ export function parseProductVariationFormData(formData: FormData) {
     variationType: formData.get("variationType"),
     variationValue: formData.get("variationValue"),
     quantity: formData.get("quantity"),
+    minimumStock: formData.get("minimumStock"),
     soldQuantity: formData.get("soldQuantity"),
     manufacturingValue: formData.get("manufacturingValue"),
     saleValue: formData.get("saleValue"),

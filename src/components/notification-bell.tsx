@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 
 type OutOfStockProduct = {
   id: string;
+  href: string;
   sku: string;
   name: string;
   type: "product" | "variation";
+  status: "out" | "low";
 };
 
 export function NotificationBell({ products }: { products: OutOfStockProduct[] }) {
@@ -46,20 +47,30 @@ export function NotificationBell({ products }: { products: OutOfStockProduct[] }
       {open ? (
         <div className="absolute right-0 z-50 mt-3 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           <div className="border-b border-slate-200 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-950">Itens sem estoque</p>
-            <p className="text-xs text-slate-500">Quantidade zerada no cadastro de estoque.</p>
+            <p className="text-sm font-semibold text-slate-950">Alertas de estoque</p>
+            <p className="text-xs text-slate-500">Itens zerados ou abaixo do estoque mínimo.</p>
           </div>
           <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
             {products.map((product) => (
-              <Link key={product.id} href="/stock" onClick={() => setOpen(false)} className="block px-4 py-3 hover:bg-slate-50">
+              <a key={product.id} href={product.href} onClick={() => setOpen(false)} className="block px-4 py-3 hover:bg-slate-50">
                 <p className="text-sm font-semibold text-slate-950">{product.name}</p>
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">SKU: {product.sku}</p>
-                <p className="text-xs text-red-700">{product.type === "variation" ? "Variação sem estoque" : "Produto sem estoque"}</p>
-              </Link>
+                <p className={product.status === "out" ? "text-xs text-red-700" : "text-xs text-orange-700"}>
+                  {formatAlertMessage(product.type, product.status)}
+                </p>
+              </a>
             ))}
           </div>
         </div>
       ) : null}
     </div>
   );
+}
+
+function formatAlertMessage(type: "product" | "variation", status: "out" | "low") {
+  if (status === "low") {
+    return type === "variation" ? "Variação abaixo do estoque mínimo" : "Produto abaixo do estoque mínimo";
+  }
+
+  return type === "variation" ? "Variação sem estoque" : "Produto sem estoque";
 }

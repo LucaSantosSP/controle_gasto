@@ -44,6 +44,7 @@ model Product {
   name               String   @db.VarChar(255)
   isKit              Boolean  @default(false)
   quantity           Int
+  minimumStock       Int      @default(0)
   soldQuantity       Int      @default(0)
   manufacturingValue Decimal  @default(0) @db.Decimal(10, 2)
   saleValue          Decimal  @db.Decimal(10, 2)
@@ -66,6 +67,7 @@ model ProductVariation {
   variationType      String   @default("") @db.VarChar(100)
   variationValue     String   @default("") @db.VarChar(255)
   quantity           Int
+  minimumStock       Int      @default(0)
   soldQuantity       Int      @default(0)
   manufacturingValue Decimal  @default(0) @db.Decimal(10, 2)
   saleValue          Decimal  @db.Decimal(10, 2)

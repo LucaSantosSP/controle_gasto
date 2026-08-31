@@ -16,6 +16,8 @@ export function StockManager({ products }: { products: ProductRow[] }) {
   const [addingVariation, setAddingVariation] = useState<ProductRow | null>(null);
   const [editingVariation, setEditingVariation] = useState<{ product: ProductRow; variationId: number } | null>(null);
   const [viewingVariations, setViewingVariations] = useState<ProductRow | null>(null);
+  const [focusedProductId, setFocusedProductId] = useState<number | null>(null);
+  const [focusedVariationId, setFocusedVariationId] = useState<number | null>(null);
   const [creatingKit, setCreatingKit] = useState(false);
   const [search, setSearch] = useState("");
   const filteredProducts = products.filter((product) => {
@@ -27,6 +29,32 @@ export function StockManager({ products }: { products: ProductRow[] }) {
 
     return product.name.toLowerCase().includes(normalizedSearch) || product.sku.toLowerCase().includes(normalizedSearch);
   });
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const productId = Number(searchParams.get("focusProduct"));
+    const variationId = Number(searchParams.get("focusVariation"));
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return;
+    }
+
+    const targetProduct = products.find((currentProduct) => currentProduct.id === productId);
+
+    if (!targetProduct) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      setFocusedProductId(productId);
+      document.getElementById(`product-${productId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      if (Number.isInteger(variationId) && variationId > 0) {
+        setFocusedVariationId(variationId);
+        setViewingVariations(targetProduct);
+      }
+    }, 100);
+  }, [products]);
 
   return (
     <div className="space-y-8">
@@ -90,7 +118,11 @@ export function StockManager({ products }: { products: ProductRow[] }) {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filteredProducts.map((product) => (
-              <article key={product.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <article
+                key={product.id}
+                id={`product-${product.id}`}
+                className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${focusedProductId === product.id ? "border-orange-400 ring-4 ring-orange-100" : "border-slate-200"}`}
+              >
                 <ProductMedia product={product} />
                 <div className="space-y-4 p-5">
                   <div>
@@ -102,7 +134,9 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                     </div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">SKU: {product.sku}</p>
                     <p className="text-sm text-slate-500">Estoque: {product.quantity}</p>
+                    <p className="text-sm text-slate-500">Mínimo: {product.minimumStock}</p>
                     <p className="text-sm text-slate-500">Vendidos: {product.soldQuantity}</p>
+                    {isBelowMinimumStock(product) ? <p className="text-sm font-semibold text-orange-700">Estoque abaixo do mínimo</p> : null}
                   </div>
                   {product.components.length > 0 ? (
                     <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
@@ -177,6 +211,7 @@ export function StockManager({ products }: { products: ProductRow[] }) {
       {viewingVariations ? (
         <VariationsSummaryModal
           product={viewingVariations}
+          focusedVariationId={focusedVariationId}
           onClose={() => setViewingVariations(null)}
           onEdit={(variationId) => {
             setEditingVariation({ product: viewingVariations, variationId });
@@ -522,7 +557,27 @@ function SelectionItemCard({
   );
 }
 
-function VariationsSummaryModal({ product, onClose, onEdit }: { product: ProductRow; onClose: () => void; onEdit: (variationId: number) => void }) {
+function VariationsSummaryModal({
+  product,
+  focusedVariationId,
+  onClose,
+  onEdit,
+}: {
+  product: ProductRow;
+  focusedVariationId: number | null;
+  onClose: () => void;
+  onEdit: (variationId: number) => void;
+}) {
+  useEffect(() => {
+    if (!focusedVariationId) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      document.getElementById(`variation-${focusedVariationId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  }, [focusedVariationId]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
       <section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
@@ -539,12 +594,17 @@ function VariationsSummaryModal({ product, onClose, onEdit }: { product: Product
 
         <div className="space-y-3">
           {product.variations.map((variation) => (
-            <article key={variation.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <article
+              key={variation.id}
+              id={`variation-${variation.id}`}
+              className={`rounded-xl border p-4 ${focusedVariationId === variation.id ? "border-orange-400 bg-orange-50 ring-4 ring-orange-100" : "border-slate-200 bg-slate-50"}`}
+            >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="font-semibold text-slate-950">{formatVariationLabel(variation)}</h3>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">SKU: {variation.sku || product.sku}</p>
-                  {variation.quantity <= 0 ? <p className="mt-1 text-sm font-semibold text-red-700">Sem estoque</p> : null}
+                  {variation.quantity <= 0 ? <p className="mt-1 text-sm font-semibold text-red-700">Variação sem estoque</p> : null}
+                  {isBelowMinimumStock(variation) ? <p className="mt-1 text-sm font-semibold text-orange-700">Estoque abaixo do mínimo</p> : null}
                 </div>
                 <button
                   type="button"
@@ -556,6 +616,7 @@ function VariationsSummaryModal({ product, onClose, onEdit }: { product: Product
               </div>
               <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                 <p className="rounded-lg bg-white px-3 py-2 text-slate-700">Estoque: <strong className="text-slate-950">{variation.quantity}</strong></p>
+                <p className="rounded-lg bg-white px-3 py-2 text-slate-700">Mínimo: <strong className="text-slate-950">{variation.minimumStock}</strong></p>
                 <p className="rounded-lg bg-white px-3 py-2 text-slate-700">Vendidos: <strong className="text-slate-950">{variation.soldQuantity}</strong></p>
                 <p className="rounded-lg bg-white px-3 py-2 text-slate-700">Fabricação: <strong className="text-slate-950">{formatCurrency(variation.manufacturingValue)}</strong></p>
                 <p className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">Venda: <strong>{formatCurrency(variation.saleValue)}</strong></p>
@@ -575,6 +636,7 @@ function VariationModal({ product, variation, onClose }: { product: ProductRow; 
   const [variationType, setVariationType] = useState(variation?.variationType ?? "");
   const [variationValue, setVariationValue] = useState(variation?.variationValue ?? "");
   const [quantity, setQuantity] = useState(variation?.quantity.toString() ?? "0");
+  const [minimumStock, setMinimumStock] = useState(variation?.minimumStock.toString() ?? "0");
   const [soldQuantity, setSoldQuantity] = useState(variation?.soldQuantity.toString() ?? "0");
   const [manufacturingValue, setManufacturingValue] = useState(variation ? toMoneyInput(variation.manufacturingValue) : toMoneyInput(product.manufacturingValue));
   const [saleValue, setSaleValue] = useState(variation ? toMoneyInput(variation.saleValue) : toMoneyInput(product.saleValue));
@@ -630,6 +692,9 @@ function VariationModal({ product, variation, onClose }: { product: ProductRow; 
             <Field label="Quantidade" error={state.errors?.quantity?.[0]}>
               <input name="quantity" type="number" min="0" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" />
             </Field>
+            <Field label="Estoque mínimo" error={state.errors?.minimumStock?.[0]}>
+              <input name="minimumStock" type="number" min="0" step="1" required value={minimumStock} onChange={(event) => setMinimumStock(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" />
+            </Field>
             <Field label="Quantidade vendida" error={state.errors?.soldQuantity?.[0]}>
               <input name="soldQuantity" type="number" min="0" step="1" required value={soldQuantity} onChange={(event) => setSoldQuantity(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" />
             </Field>
@@ -656,6 +721,8 @@ function VariationModal({ product, variation, onClose }: { product: ProductRow; 
 
 function ProductMedia({ product }: { product: ProductRow }) {
   const componentImages = product.components.filter((component) => component.photoUrl).slice(0, 4);
+  const hasVariationOutOfStock = product.variations.some((variation) => variation.quantity <= 0);
+  const hasVariationBelowMinimum = product.variations.some(isBelowMinimumStock);
 
   return (
     <div className="relative aspect-[4/3] bg-slate-100">
@@ -664,9 +731,19 @@ function ProductMedia({ product }: { product: ProductRow }) {
           Sem estoque
         </div>
       ) : null}
-      {product.quantity > 0 && product.variations.some((variation) => variation.quantity <= 0) ? (
+      {isBelowMinimumStock(product) ? (
+        <div className="absolute left-3 top-3 z-10 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
+          Estoque abaixo do mínimo
+        </div>
+      ) : null}
+      {product.quantity > 0 && !isBelowMinimumStock(product) && hasVariationOutOfStock ? (
         <div className="absolute left-3 top-3 z-10 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
           Variação sem estoque
+        </div>
+      ) : null}
+      {product.quantity > 0 && !isBelowMinimumStock(product) && !hasVariationOutOfStock && hasVariationBelowMinimum ? (
+        <div className="absolute left-3 top-3 z-10 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
+          Variação abaixo do mínimo
         </div>
       ) : null}
       {product.photoUrl ? (
@@ -828,11 +905,16 @@ function formatVariationLabel(variation: Pick<ProductVariationRow, "name" | "var
   return typeValue ? `${variation.name} (${typeValue})` : variation.name;
 }
 
+function isBelowMinimumStock(item: { quantity: number; minimumStock: number }) {
+  return item.quantity > 0 && item.minimumStock > 0 && item.quantity < item.minimumStock;
+}
+
 function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () => void }) {
   const [state, formAction, pending] = useActionState(createKit, initialActionState);
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [minimumStock, setMinimumStock] = useState("0");
   const [soldQuantity, setSoldQuantity] = useState("0");
   const [manufacturingValue, setManufacturingValue] = useState("");
   const [manufacturingValueEdited, setManufacturingValueEdited] = useState(false);
@@ -893,6 +975,9 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
           </Field>
           <Field label="Quantidade disponível" error={state.errors?.quantity?.[0]}>
             <input name="quantity" required type="number" min="0" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="2" />
+          </Field>
+          <Field label="Estoque mínimo" error={state.errors?.minimumStock?.[0]}>
+            <input name="minimumStock" required type="number" min="0" step="1" value={minimumStock} onChange={(event) => setMinimumStock(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="0" />
           </Field>
           <Field label="Quantidade vendida" error={state.errors?.soldQuantity?.[0]}>
             <input name="soldQuantity" required type="number" min="0" step="1" value={soldQuantity} onChange={(event) => setSoldQuantity(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="0" />
@@ -1035,6 +1120,7 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
   const [sku, setSku] = useState(product?.sku ?? "");
   const [name, setName] = useState(product?.name ?? "");
   const [quantity, setQuantity] = useState(product?.quantity.toString() ?? "");
+  const [minimumStock, setMinimumStock] = useState(product?.minimumStock.toString() ?? "0");
   const [soldQuantity, setSoldQuantity] = useState(product?.soldQuantity.toString() ?? "0");
   const [manufacturingValue, setManufacturingValue] = useState(product ? toMoneyInput(product.manufacturingValue) : "");
   const [saleValue, setSaleValue] = useState(product ? toMoneyInput(product.saleValue) : "");
@@ -1083,6 +1169,19 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               onChange={(event) => setQuantity(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
               placeholder="10"
+            />
+          </Field>
+          <Field label="Estoque mínimo" error={state.errors?.minimumStock?.[0]}>
+            <input
+              name="minimumStock"
+              required
+              type="number"
+              min="0"
+              step="1"
+              value={minimumStock}
+              onChange={(event) => setMinimumStock(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+              placeholder="0"
             />
           </Field>
           <Field label="Quantidade vendida" error={state.errors?.soldQuantity?.[0]}>

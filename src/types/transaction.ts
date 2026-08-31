@@ -25,6 +25,7 @@ export type ProductRow = {
   name: string;
   isKit: boolean;
   quantity: number;
+  minimumStock: number;
   soldQuantity: number;
   manufacturingValue: string;
   saleValue: string;
@@ -40,6 +41,7 @@ export type ProductVariationRow = {
   variationType: string;
   variationValue: string;
   quantity: number;
+  minimumStock: number;
   soldQuantity: number;
   manufacturingValue: string;
   saleValue: string;
