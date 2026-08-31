@@ -117,13 +117,16 @@ export function StockManager({ products }: { products: ProductRow[] }) {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredProducts.map((product) => (
+            {filteredProducts.map((product) => {
+              const kitStockRisk = hasKitStockRisk(product, products);
+
+              return (
               <article
                 key={product.id}
                 id={`product-${product.id}`}
                 className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${focusedProductId === product.id ? "border-orange-400 ring-4 ring-orange-100" : "border-slate-200"}`}
               >
-                <ProductMedia product={product} />
+                <ProductMedia product={product} kitStockRisk={kitStockRisk} />
                 <div className="space-y-4 p-5">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -137,6 +140,7 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                     <p className="text-sm text-slate-500">Mínimo: {product.minimumStock}</p>
                     <p className="text-sm text-slate-500">Vendidos: {product.soldQuantity}</p>
                     {isBelowMinimumStock(product) ? <p className="text-sm font-semibold text-orange-700">Estoque abaixo do mínimo</p> : null}
+                    {kitStockRisk ? <p className="text-sm font-semibold text-red-700">Kit sem componentes suficientes para venda</p> : null}
                   </div>
                   {product.components.length > 0 ? (
                     <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
@@ -204,7 +208,8 @@ export function StockManager({ products }: { products: ProductRow[] }) {
                   </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -719,7 +724,7 @@ function VariationModal({ product, variation, onClose }: { product: ProductRow; 
   );
 }
 
-function ProductMedia({ product }: { product: ProductRow }) {
+function ProductMedia({ product, kitStockRisk }: { product: ProductRow; kitStockRisk: boolean }) {
   const componentImages = product.components.filter((component) => component.photoUrl).slice(0, 4);
   const hasVariationOutOfStock = product.variations.some((variation) => variation.quantity <= 0);
   const hasVariationBelowMinimum = product.variations.some(isBelowMinimumStock);
@@ -731,17 +736,22 @@ function ProductMedia({ product }: { product: ProductRow }) {
           Sem estoque
         </div>
       ) : null}
-      {isBelowMinimumStock(product) ? (
+      {product.quantity > 0 && kitStockRisk ? (
+        <div className="absolute left-3 top-3 z-10 rounded-full bg-red-600 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
+          Kit crítico
+        </div>
+      ) : null}
+      {product.quantity > 0 && !kitStockRisk && isBelowMinimumStock(product) ? (
         <div className="absolute left-3 top-3 z-10 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
           Estoque abaixo do mínimo
         </div>
       ) : null}
-      {product.quantity > 0 && !isBelowMinimumStock(product) && hasVariationOutOfStock ? (
+      {product.quantity > 0 && !kitStockRisk && !isBelowMinimumStock(product) && hasVariationOutOfStock ? (
         <div className="absolute left-3 top-3 z-10 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
           Variação sem estoque
         </div>
       ) : null}
-      {product.quantity > 0 && !isBelowMinimumStock(product) && !hasVariationOutOfStock && hasVariationBelowMinimum ? (
+      {product.quantity > 0 && !kitStockRisk && !isBelowMinimumStock(product) && !hasVariationOutOfStock && hasVariationBelowMinimum ? (
         <div className="absolute left-3 top-3 z-10 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
           Variação abaixo do mínimo
         </div>
@@ -907,6 +917,62 @@ function formatVariationLabel(variation: Pick<ProductVariationRow, "name" | "var
 
 function isBelowMinimumStock(item: { quantity: number; minimumStock: number }) {
   return item.quantity > 0 && item.minimumStock > 0 && item.quantity < item.minimumStock;
+}
+
+function hasKitStockRisk(product: ProductRow, products: ProductRow[]) {
+  if (!product.isKit || product.quantity <= 0) {
+    return false;
+  }
+
+  const required = new Map<string, { productId: number; variationId: number | null; quantity: number }>();
+
+  addRequiredKitComponents(product.id, product.quantity, products, required, new Set<number>());
+
+  for (const movement of required.values()) {
+    const component = products.find((item) => item.id === movement.productId);
+    const stockQuantity = movement.variationId ? component?.variations.find((variation) => variation.id === movement.variationId)?.quantity : component?.quantity;
+
+    if ((stockQuantity ?? 0) < movement.quantity) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function addRequiredKitComponents(
+  kitId: number,
+  quantity: number,
+  products: ProductRow[],
+  required: Map<string, { productId: number; variationId: number | null; quantity: number }>,
+  visiting: Set<number>
+) {
+  if (visiting.has(kitId)) {
+    return;
+  }
+
+  const kit = products.find((product) => product.id === kitId);
+
+  if (!kit) {
+    return;
+  }
+
+  visiting.add(kitId);
+
+  for (const component of kit.components) {
+    const componentQuantity = quantity * component.quantity;
+    const key = `${component.componentId}:${component.variationId ?? ""}`;
+    const current = required.get(key);
+
+    required.set(key, {
+      productId: component.componentId,
+      variationId: component.variationId,
+      quantity: (current?.quantity ?? 0) + componentQuantity,
+    });
+    addRequiredKitComponents(component.componentId, componentQuantity, products, required, visiting);
+  }
+
+  visiting.delete(kitId);
 }
 
 function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () => void }) {

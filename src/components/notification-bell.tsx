@@ -7,8 +7,8 @@ type OutOfStockProduct = {
   href: string;
   sku: string;
   name: string;
-  type: "product" | "variation";
-  status: "out" | "low";
+  type: "product" | "variation" | "kit";
+  status: "out" | "low" | "critical";
 };
 
 export function NotificationBell({ products }: { products: OutOfStockProduct[] }) {
@@ -55,7 +55,7 @@ export function NotificationBell({ products }: { products: OutOfStockProduct[] }
               <a key={product.id} href={product.href} onClick={() => setOpen(false)} className="block px-4 py-3 hover:bg-slate-50">
                 <p className="text-sm font-semibold text-slate-950">{product.name}</p>
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">SKU: {product.sku}</p>
-                <p className={product.status === "out" ? "text-xs text-red-700" : "text-xs text-orange-700"}>
+                <p className={product.status === "low" ? "text-xs text-orange-700" : "text-xs text-red-700"}>
                   {formatAlertMessage(product.type, product.status)}
                 </p>
               </a>
@@ -67,7 +67,11 @@ export function NotificationBell({ products }: { products: OutOfStockProduct[] }
   );
 }
 
-function formatAlertMessage(type: "product" | "variation", status: "out" | "low") {
+function formatAlertMessage(type: "product" | "variation" | "kit", status: "out" | "low" | "critical") {
+  if (status === "critical") {
+    return "Kit sem componentes suficientes para venda";
+  }
+
   if (status === "low") {
     return type === "variation" ? "Variação abaixo do estoque mínimo" : "Produto abaixo do estoque mínimo";
   }
