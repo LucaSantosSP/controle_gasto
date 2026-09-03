@@ -37,12 +37,6 @@ export const productSchema = z.object({
     .min(0, "A quantidade vendida deve ser maior ou igual a zero."),
   manufacturingValue: moneyText("o valor de fabricação"),
   saleValue: moneyText("o valor de venda"),
-  photoUrl: z
-    .string({ error: "Informe uma URL válida para a foto." })
-    .trim()
-    .refine((value) => value === "" || z.string().url().safeParse(value).success, {
-      message: "Informe uma URL válida para a foto.",
-    }),
 });
 
 export const sellProductSchema = z.object({
@@ -139,7 +133,6 @@ export function parseProductFormData(formData: FormData) {
     soldQuantity: formData.get("soldQuantity"),
     manufacturingValue: formData.get("manufacturingValue"),
     saleValue: formData.get("saleValue"),
-    photoUrl: formData.get("photoUrl"),
   });
 }
 

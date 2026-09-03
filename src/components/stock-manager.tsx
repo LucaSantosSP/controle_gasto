@@ -985,7 +985,6 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
   const [manufacturingValue, setManufacturingValue] = useState("");
   const [manufacturingValueEdited, setManufacturingValueEdited] = useState(false);
   const [saleValue, setSaleValue] = useState("");
-  const [photoUrl, setPhotoUrl] = useState("");
   const [components, setComponents] = useState<Array<{ componentId: string; variationId: string; quantity: string }>>([
     { componentId: "", variationId: "", quantity: "1" },
   ]);
@@ -1066,8 +1065,8 @@ function KitForm({ products, onSaved }: { products: ProductRow[]; onSaved: () =>
           <Field label="Valor de venda" error={state.errors?.saleValue?.[0]}>
             <input name="saleValue" required inputMode="decimal" value={saleValue} onChange={(event) => setSaleValue(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="89,90" />
           </Field>
-          <Field label="URL da foto (opcional)" error={state.errors?.photoUrl?.[0]}>
-            <input name="photoUrl" type="url" value={photoUrl} onChange={(event) => setPhotoUrl(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950" placeholder="https://exemplo.com/foto.jpg" />
+          <Field label="Imagem do kit (opcional)" error={state.errors?.photo?.[0]}>
+            <input name="photo" type="file" accept="image/*" className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none file:mr-3 file:rounded-md file:border-0 file:bg-slate-950 file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white focus:border-slate-950" />
           </Field>
         </div>
 
@@ -1190,7 +1189,6 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
   const [soldQuantity, setSoldQuantity] = useState(product?.soldQuantity.toString() ?? "0");
   const [manufacturingValue, setManufacturingValue] = useState(product ? toMoneyInput(product.manufacturingValue) : "");
   const [saleValue, setSaleValue] = useState(product ? toMoneyInput(product.saleValue) : "");
-  const [photoUrl, setPhotoUrl] = useState(product?.photoUrl ?? "");
 
   useEffect(() => {
     if (state.ok && product) {
@@ -1285,14 +1283,19 @@ function ProductForm({ product, onSaved }: { product: ProductRow | null; onSaved
               placeholder="28,90"
             />
           </Field>
-          <Field label="URL da foto (opcional)" error={state.errors?.photoUrl?.[0]}>
+          <Field label="Imagem do produto (opcional)" error={state.errors?.photo?.[0]}>
+            {product?.photoUrl ? (
+              <div className="mb-2 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={product.photoUrl} alt={product.name} className="h-14 w-14 rounded-md object-cover" />
+                <span className="text-xs text-slate-500">Envie uma nova imagem para substituir a atual.</span>
+              </div>
+            ) : null}
             <input
-              name="photoUrl"
-              type="url"
-              value={photoUrl}
-              onChange={(event) => setPhotoUrl(event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
-              placeholder="https://exemplo.com/foto.jpg"
+              name="photo"
+              type="file"
+              accept="image/*"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none file:mr-3 file:rounded-md file:border-0 file:bg-slate-950 file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white focus:border-slate-950"
             />
           </Field>
         </div>

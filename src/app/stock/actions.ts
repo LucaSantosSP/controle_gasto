@@ -1,17 +1,30 @@
 "use server";
 
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
+import { copyFile, mkdir, unlink, writeFile } from "fs/promises";
 import { revalidatePath } from "next/cache";
+import path from "path";
 import { prisma } from "@/lib/prisma";
 import { calculateShopeeFee, roundMoney } from "@/lib/shopee";
 import { parseKitComponents, parseOptionalSaleItems, parseProductFormData, parseProductVariationFormData, parseSaleItems, parseSellProductFormData } from "@/lib/validation";
 import type { ActionState } from "@/types/transaction";
+
+const PRODUCT_UPLOAD_URL_PREFIX = "/uploads/products";
+const PRODUCT_UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "products");
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 export async function createProduct(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = parseProductFormData(formData);
 
   if (!parsed.success) {
     return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
+  }
+
+  const savedImage = await saveProductImage(formData);
+
+  if (!savedImage.ok) {
+    return savedImage.state;
   }
 
   try {
@@ -25,7 +38,7 @@ export async function createProduct(_: ActionState, formData: FormData): Promise
         soldQuantity: parsed.data.soldQuantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
         saleValue: new Prisma.Decimal(parsed.data.saleValue),
-        photoUrl: parsed.data.photoUrl,
+        photoUrl: savedImage.path,
       },
     });
 
@@ -33,9 +46,11 @@ export async function createProduct(_: ActionState, formData: FormData): Promise
     return { ok: true, message: "Produto cadastrado com sucesso." };
   } catch (error) {
     if (isDuplicateSkuError(error)) {
+      await deleteProductImageIfUnused(savedImage.path);
       return { ok: false, message: "Já existe um produto com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
     }
 
+    await deleteProductImageIfUnused(savedImage.path);
     return { ok: false, message: "Não foi possível cadastrar o produto." };
   }
 }
@@ -52,13 +67,28 @@ export async function updateProduct(_: ActionState, formData: FormData): Promise
     return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
   }
 
+  const savedImage = await saveProductImage(formData);
+
+  if (!savedImage.ok) {
+    return savedImage.state;
+  }
+
   try {
-    const productWithSku = await prisma.product.findUnique({
-      where: { sku: parsed.data.sku },
-      select: { id: true },
-    });
+    const [productWithSku, currentProduct] = await Promise.all([
+      prisma.product.findUnique({
+        where: { sku: parsed.data.sku },
+        select: { id: true },
+      }),
+      prisma.product.findUnique({ where: { id }, select: { photoUrl: true } }),
+    ]);
+
+    if (!currentProduct) {
+      await deleteProductImageIfUnused(savedImage.path);
+      return { ok: false, message: "Produto não encontrado." };
+    }
 
     if (productWithSku && productWithSku.id !== id) {
+      await deleteProductImageIfUnused(savedImage.path);
       return { ok: false, message: "Já existe um produto com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
     }
 
@@ -72,17 +102,23 @@ export async function updateProduct(_: ActionState, formData: FormData): Promise
         soldQuantity: parsed.data.soldQuantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
         saleValue: new Prisma.Decimal(parsed.data.saleValue),
-        photoUrl: parsed.data.photoUrl,
+        photoUrl: savedImage.path || currentProduct.photoUrl,
       },
     });
+
+    if (savedImage.path) {
+      await deleteProductImageIfUnused(currentProduct.photoUrl);
+    }
 
     revalidatePath("/stock");
     return { ok: true, message: "Produto atualizado com sucesso." };
   } catch (error) {
     if (isDuplicateSkuError(error)) {
+      await deleteProductImageIfUnused(savedImage.path);
       return { ok: false, message: "Já existe um produto com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
     }
 
+    await deleteProductImageIfUnused(savedImage.path);
     return { ok: false, message: "Não foi possível atualizar o produto." };
   }
 }
@@ -100,6 +136,11 @@ export async function createKit(_: ActionState, formData: FormData): Promise<Act
   }
 
   const components = mergeComponents(parsedComponents.data);
+  const savedImage = await saveProductImage(formData);
+
+  if (!savedImage.ok) {
+    return savedImage.state;
+  }
 
   try {
     const componentProductIds = Array.from(new Set(components.map((component) => component.componentId)));
@@ -140,7 +181,7 @@ export async function createKit(_: ActionState, formData: FormData): Promise<Act
         soldQuantity: parsed.data.soldQuantity,
         manufacturingValue: new Prisma.Decimal(parsed.data.manufacturingValue),
         saleValue: new Prisma.Decimal(parsed.data.saleValue),
-        photoUrl: parsed.data.photoUrl,
+        photoUrl: savedImage.path,
         kitComponents: {
           create: components,
         },
@@ -151,9 +192,11 @@ export async function createKit(_: ActionState, formData: FormData): Promise<Act
     return { ok: true, message: "Kit cadastrado com sucesso." };
   } catch (error) {
     if (isDuplicateSkuError(error)) {
+      await deleteProductImageIfUnused(savedImage.path);
       return { ok: false, message: "Já existe um produto com este SKU.", errors: { sku: ["Este SKU já está em uso."] } };
     }
 
+    await deleteProductImageIfUnused(savedImage.path);
     return { ok: false, message: "Não foi possível cadastrar o kit." };
   }
 }
@@ -240,7 +283,14 @@ export async function deleteProduct(_: ActionState, formData: FormData): Promise
   }
 
   try {
+    const product = await prisma.product.findUnique({ where: { id }, select: { photoUrl: true } });
+
+    if (!product) {
+      return { ok: false, message: "Produto não encontrado." };
+    }
+
     await prisma.product.delete({ where: { id } });
+    await deleteProductImageIfUnused(product.photoUrl);
     revalidatePath("/stock");
     return { ok: true, message: "Produto excluído com sucesso." };
   } catch {
@@ -265,17 +315,20 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
       return { ok: false, message: "Produto não encontrado." };
     }
 
-    await prisma.product.create({
+    const copiedImagePath = await copyProductImage(product.photoUrl);
+
+    try {
+      await prisma.product.create({
       data: {
         sku: await createDuplicateSku(product.sku),
         name: `${product.name} (cópia)`,
         isKit: product.isKit,
-          quantity: product.quantity,
-          minimumStock: product.minimumStock,
-          soldQuantity: product.soldQuantity,
+        quantity: product.quantity,
+        minimumStock: product.minimumStock,
+        soldQuantity: product.soldQuantity,
         manufacturingValue: product.manufacturingValue,
         saleValue: product.saleValue,
-        photoUrl: product.photoUrl,
+        photoUrl: copiedImagePath || product.photoUrl,
         kitComponents: {
           create: product.kitComponents.map((component) => ({
             componentId: component.componentId,
@@ -285,6 +338,10 @@ export async function duplicateProduct(_: ActionState, formData: FormData): Prom
         },
       },
     });
+    } catch (error) {
+      await deleteProductImageIfUnused(copiedImagePath);
+      throw error;
+    }
 
     revalidatePath("/stock");
     return { ok: true, message: "Produto duplicado com sucesso." };
@@ -449,6 +506,96 @@ async function createDuplicateSku(sku: string) {
   }
 
   return candidate;
+}
+
+async function saveProductImage(formData: FormData): Promise<{ ok: true; path: string } | { ok: false; state: ActionState }> {
+  const image = formData.get("photo");
+
+  if (!(image instanceof File) || image.size === 0) {
+    return { ok: true, path: "" };
+  }
+
+  if (!image.type.startsWith("image/")) {
+    return { ok: false, state: { ok: false, message: "Envie um arquivo de imagem válido.", errors: { photo: ["O arquivo precisa ser uma imagem."] } } };
+  }
+
+  if (image.size > MAX_IMAGE_SIZE) {
+    return { ok: false, state: { ok: false, message: "A imagem deve ter no máximo 5 MB.", errors: { photo: ["A imagem deve ter no máximo 5 MB."] } } };
+  }
+
+  const extension = imageExtension(image);
+  const filename = `${randomUUID()}${extension}`;
+
+  await mkdir(PRODUCT_UPLOAD_DIR, { recursive: true });
+  await writeFile(path.join(PRODUCT_UPLOAD_DIR, filename), Buffer.from(await image.arrayBuffer()));
+
+  return { ok: true, path: `${PRODUCT_UPLOAD_URL_PREFIX}/${filename}` };
+}
+
+async function copyProductImage(photoUrl: string) {
+  const sourcePath = productImagePath(photoUrl);
+
+  if (!sourcePath) {
+    return "";
+  }
+
+  const extension = path.extname(sourcePath) || ".webp";
+  const filename = `${randomUUID()}${extension}`;
+
+  await mkdir(PRODUCT_UPLOAD_DIR, { recursive: true });
+  await copyFile(sourcePath, path.join(PRODUCT_UPLOAD_DIR, filename));
+
+  return `${PRODUCT_UPLOAD_URL_PREFIX}/${filename}`;
+}
+
+async function deleteProductImageIfUnused(photoUrl: string) {
+  const imagePath = productImagePath(photoUrl);
+
+  if (!imagePath) {
+    return;
+  }
+
+  const references = await prisma.product.count({ where: { photoUrl } });
+
+  if (references > 0) {
+    return;
+  }
+
+  try {
+    await unlink(imagePath);
+  } catch (error) {
+    if (!isMissingFileError(error)) {
+      throw error;
+    }
+  }
+}
+
+function productImagePath(photoUrl: string) {
+  if (!photoUrl.startsWith(`${PRODUCT_UPLOAD_URL_PREFIX}/`)) {
+    return null;
+  }
+
+  return path.join(PRODUCT_UPLOAD_DIR, path.basename(photoUrl));
+}
+
+function imageExtension(image: File) {
+  const extension = path.extname(image.name).toLowerCase();
+
+  if (/^\.(avif|gif|jpe?g|png|webp|svg)$/.test(extension)) {
+    return extension;
+  }
+
+  if (image.type === "image/jpeg") {
+    return ".jpg";
+  }
+
+  const subtype = image.type.split("/")[1];
+
+  return subtype ? `.${subtype.replace(/[^a-z0-9]/gi, "").toLowerCase()}` : ".webp";
+}
+
+function isMissingFileError(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
 function mergeComponents(components: Array<{ componentId: number; variationId?: number | null; quantity: number }>) {

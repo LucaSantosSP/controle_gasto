@@ -104,7 +104,7 @@ npm run build
 
 ## Modelo do banco
 
-O sistema usa três tabelas:
+O sistema usa estas tabelas principais:
 
 - `sales`: vendas cadastradas.
 - `expenses`: gastos cadastrados.
@@ -113,7 +113,7 @@ O sistema usa três tabelas:
 - `product_components`: composição dos kits cadastrados.
 - `sale_stock_movements`: baixas de estoque geradas por vendas feitas a partir do estoque.
 
-Campos principais das duas tabelas:
+Campos principais das tabelas de vendas e gastos:
 
 - `id`
 - `sku`, único
@@ -141,12 +141,15 @@ Campos principais da tabela `products`:
 - `name`
 - `isKit`
 - `quantity`
+- `minimumStock`
 - `soldQuantity`
 - `manufacturingValue` como `DECIMAL(10,2)`
 - `saleValue` como `DECIMAL(10,2)`
 - `photoUrl`
 - `createdAt`
 - `updatedAt`
+
+As imagens de produtos e kits são salvas localmente em `public/uploads/products`. A pasta é versionada com `.gitkeep`, mas as imagens enviadas são ignoradas pelo Git pelo `.gitignore` interno da própria pasta.
 
 Campos principais da tabela `product_components`:
 
@@ -162,7 +165,10 @@ Campos principais da tabela `product_variations`:
 - `productId`
 - `sku`
 - `name`
+- `variationType`
+- `variationValue`
 - `quantity`
+- `minimumStock`
 - `soldQuantity`
 - `manufacturingValue` como `DECIMAL(10,2)`
 - `saleValue` como `DECIMAL(10,2)`
@@ -172,6 +178,7 @@ Campos principais da tabela `sale_stock_movements`:
 - `id`
 - `saleId`
 - `productId`
+- `variationId`
 - `quantity`
 
 ## Funcionalidades
@@ -181,20 +188,28 @@ Campos principais da tabela `sale_stock_movements`:
 - Listagem de vendas e gastos recentes no dashboard.
 - Cadastro, edição e exclusão de vendas.
 - Cadastro, edição e exclusão de gastos.
-- Cadastro, edição, duplicação, exclusão e listagem de produtos em estoque com foto por URL, valor de fabricação e valor de venda.
+- Cadastro, edição, duplicação, exclusão e listagem de produtos em estoque com imagem anexada, valor de fabricação e valor de venda.
 - Filtro de produtos por nome ou SKU na tela de estoque.
 - Criação de kits compostos por produtos e/ou outros kits existentes.
-- Criação de variações de produtos, com estoque e preços próprios sugeridos a partir do produto matriz.
+- Criação de variações de produtos, com tipo e valor da variação, estoque mínimo, estoque e preços próprios sugeridos a partir do produto matriz.
 - Kits e vendas permitem selecionar variações específicas dos produtos.
-- Ao adicionar itens em kits ou vendas, a escolha de produtos/kits é feita por modal com busca por nome, SKU ou variação.
+- Ao adicionar itens em kits, vendas ou brindes, a escolha de produtos/kits é feita por modal com busca por nome, SKU ou variação e miniatura da foto cadastrada.
 - Baixa recursiva de estoque ao vender kits, descontando o kit vendido e todos os itens que o compõem.
+- Alertas críticos quando o estoque cadastrado de um kit não pode ser sustentado pelos produtos, kits ou variações da composição.
 - Controle de quantidade vendida por produto, editável manualmente e atualizado ao lançar venda pelo estoque.
-- URL de foto opcional no estoque, com ícone padrão quando não houver imagem.
+- Controle de estoque mínimo para produtos, kits e variações.
+- Imagem opcional no estoque, com ícone padrão quando não houver imagem.
+- Imagens de produtos/kits são armazenadas em `public/uploads/products` e removidas automaticamente quando o produto é excluído ou quando a imagem é substituída.
 - Kits sem foto própria exibem miniaturas das imagens dos itens que compõem o kit.
-- Alerta visual em produtos sem estoque.
+- Alerta visual em produtos sem estoque, abaixo do mínimo, com variações sem estoque, variações abaixo do mínimo ou kits críticos.
+- Sino de notificações para itens sem estoque, abaixo do mínimo e kits críticos, com navegação direta até o produto ou abertura do modal de variações com foco na variação afetada.
 - Lançamento de venda diretamente pelo estoque com quantidade vendida, desconto, valor final manual e plataforma.
 - Venda única com múltiplos produtos e/ou kits pelo modal `Vendido`.
+- Venda pelo estoque com brindes vindos de produtos/kits cadastrados, baixando estoque sem somar receita.
+- Exibição do custo de fabricação dos itens vendidos, dos brindes e do total no modal de venda.
 - Ao excluir uma venda feita pelo estoque, os produtos e kits daquela venda voltam automaticamente ao estoque.
+- Cards de produto exibem apenas resumo das variações; os detalhes abrem em modal próprio.
+- Modais fecham ao clicar fora da área de conteúdo, mantendo o botão `Fechar` disponível.
 - Cálculo automático de taxas Shopee para vendas marcadas como `Vendido na Shopee`.
 - Cálculo do total em tempo real nos formulários.
 - Validações no servidor com Zod.
