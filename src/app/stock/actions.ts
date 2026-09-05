@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { calculateShopeeFee, roundMoney } from "@/lib/shopee";
-import { parseKitComponents, parseOptionalSaleItems, parseProductFormData, parseProductVariationFormData, parseSaleItems, parseSellProductFormData } from "@/lib/validation";
+import { parseKitComponents, parseOptionalSaleItems, parseProductFormData, parseProductVariationFormData, parseSaleItems, parseSellProductFormData, parseShippingPackageId } from "@/lib/validation";
 import type { ActionState } from "@/types/transaction";
 
 const PRODUCT_UPLOAD_URL_PREFIX = "/uploads/products";
@@ -354,6 +354,7 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
   const parsed = parseSellProductFormData(formData);
   const parsedItems = parseSaleItems(formData.get("items"));
   const parsedGiftItems = parseOptionalSaleItems(formData.get("giftItems"));
+  const parsedShippingPackageId = parseShippingPackageId(formData);
 
   if (!parsed.success) {
     return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
@@ -367,8 +368,12 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
     return { ok: false, message: parsedGiftItems.message };
   }
 
+  if (!parsedShippingPackageId.success) {
+    return { ok: false, message: parsedShippingPackageId.message };
+  }
+
   try {
-    const [allProducts, allComponents] = await Promise.all([
+    const [allProducts, allComponents, shippingPackage] = await Promise.all([
       prisma.product.findMany({
         select: {
           id: true,
@@ -379,6 +384,7 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
         },
       }),
       prisma.productComponent.findMany({ select: { kitId: true, componentId: true, variationId: true, quantity: true } }),
+      findShippingPackage(parsedShippingPackageId.data),
     ]);
     const saleItems = mergeSaleItems(parsedItems.data);
     const giftItems = mergeSaleItems(parsedGiftItems.data);
@@ -442,6 +448,8 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
           platformFeeValue: new Prisma.Decimal(platformFeeValue),
           totalValue: new Prisma.Decimal(totalValue),
           platform: parsed.data.platform,
+          shippingPackageId: shippingPackage?.id,
+          shippingPackageUnitValue: shippingPackage?.unitValue ?? new Prisma.Decimal(0),
           date: new Date(`${parsed.data.date}T00:00:00.000Z`),
           stockMovements: {
             create: Array.from(requiredQuantities.values()).map((movement) => ({
@@ -472,6 +480,23 @@ export async function sellProduct(_: ActionState, formData: FormData): Promise<A
   } catch {
     return { ok: false, message: "Não foi possível lançar a venda." };
   }
+}
+
+async function findShippingPackage(id: number | null) {
+  if (!id) {
+    return null;
+  }
+
+  const shippingPackage = await prisma.shippingPackage.findUnique({
+    where: { id },
+    select: { id: true, unitValue: true },
+  });
+
+  if (!shippingPackage) {
+    throw new Error("Pacote de envio não encontrado.");
+  }
+
+  return shippingPackage;
 }
 
 function validateSaleItems(

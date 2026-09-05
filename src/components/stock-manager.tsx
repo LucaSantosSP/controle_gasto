@@ -5,12 +5,12 @@ import type { ReactNode } from "react";
 import { createKit, createProduct, createVariation, deleteProduct, duplicateProduct, sellProduct, updateProduct, updateVariation } from "@/app/stock/actions";
 import { formatCurrency, toInputDate, toMoneyInput } from "@/lib/format";
 import { calculateShopeeFee, roundMoney } from "@/lib/shopee";
-import { initialActionState, type ActionState, type ProductRow, type ProductVariationRow } from "@/types/transaction";
+import { initialActionState, type ActionState, type ProductRow, type ProductVariationRow, type ShippingPackageRow } from "@/types/transaction";
 
 type ServerAction = (state: ActionState, formData: FormData) => Promise<ActionState>;
 type ProductSelectionDraft = { productId: string; variationId: string; quantity: string };
 
-export function StockManager({ products }: { products: ProductRow[] }) {
+export function StockManager({ products, shippingPackages }: { products: ProductRow[]; shippingPackages: ShippingPackageRow[] }) {
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [selling, setSelling] = useState<ProductRow | null>(null);
   const [addingVariation, setAddingVariation] = useState<ProductRow | null>(null);
@@ -224,7 +224,7 @@ export function StockManager({ products }: { products: ProductRow[] }) {
           }}
         />
       ) : null}
-      {selling ? <SellProductModal product={selling} products={products} onClose={() => setSelling(null)} /> : null}
+      {selling ? <SellProductModal product={selling} products={products} shippingPackages={shippingPackages} onClose={() => setSelling(null)} /> : null}
       {addingVariation ? <VariationModal product={addingVariation} onClose={() => setAddingVariation(null)} /> : null}
       {editingVariation ? (
         <VariationModal
@@ -237,7 +237,17 @@ export function StockManager({ products }: { products: ProductRow[] }) {
   );
 }
 
-function SellProductModal({ product, products, onClose }: { product: ProductRow; products: ProductRow[]; onClose: () => void }) {
+function SellProductModal({
+  product,
+  products,
+  shippingPackages,
+  onClose,
+}: {
+  product: ProductRow;
+  products: ProductRow[];
+  shippingPackages: ShippingPackageRow[];
+  onClose: () => void;
+}) {
   const [state, formAction, pending] = useActionState(sellProduct, initialActionState);
   const [saleItems, setSaleItems] = useState<ProductSelectionDraft[]>([{ productId: product.id.toString(), variationId: "", quantity: "1" }]);
   const [giftItems, setGiftItems] = useState<ProductSelectionDraft[]>([]);
@@ -245,6 +255,7 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
   const [discountType, setDiscountType] = useState("NONE");
   const [discountValue, setDiscountValue] = useState("");
   const [finalValue, setFinalValue] = useState("");
+  const [shippingPackageId, setShippingPackageId] = useState("");
   const [pickingSaleItemIndex, setPickingSaleItemIndex] = useState<number | null>(null);
   const [pickingGiftItemIndex, setPickingGiftItemIndex] = useState<number | null>(null);
 
@@ -265,9 +276,11 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
   const itemValueBeforeFee = soldQuantity > 0 ? roundMoney(valueBeforeFee / soldQuantity) : 0;
   const platformFee = platform === "SHOPEE" ? calculateShopeeFee(itemValueBeforeFee, soldQuantity) : 0;
   const netValue = roundMoney(Math.max(valueBeforeFee - platformFee, 0));
+  const selectedShippingPackage = shippingPackages.find((shippingPackage) => shippingPackage.id === Number(shippingPackageId));
+  const shippingPackageCost = Number(selectedShippingPackage?.unitValue ?? 0);
   const saleManufacturingCost = calculateSelectionManufacturingCost(validSaleItems, products);
   const giftManufacturingCost = calculateSelectionManufacturingCost(validGiftItems, products);
-  const totalManufacturingCost = roundMoney(saleManufacturingCost + giftManufacturingCost);
+  const totalManufacturingCost = roundMoney(saleManufacturingCost + giftManufacturingCost + shippingPackageCost);
   const serializedItems = JSON.stringify(validSaleItems);
   const serializedGiftItems = JSON.stringify(validGiftItems);
 
@@ -288,6 +301,7 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
         <form action={formAction} className="space-y-5">
           <input type="hidden" name="items" value={serializedItems} />
           <input type="hidden" name="giftItems" value={serializedGiftItems} />
+          <input type="hidden" name="shippingPackageId" value={shippingPackageId} />
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-semibold text-slate-950">Itens da venda</h3>
@@ -416,6 +430,20 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
                 <option value="SHOPEE">Vendido na Shopee</option>
               </select>
             </Field>
+            <Field label="Pacote de envio">
+              <select
+                value={shippingPackageId}
+                onChange={(event) => setShippingPackageId(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+              >
+                <option value="">Sem pacote</option>
+                {shippingPackages.map((shippingPackage) => (
+                  <option key={shippingPackage.id} value={shippingPackage.id}>
+                    {shippingPackage.name} | {formatCurrency(shippingPackage.unitValue)}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Tipo de desconto" error={state.errors?.discountType?.[0]}>
               <select
                 name="discountType"
@@ -458,6 +486,7 @@ function SellProductModal({ product, products, onClose }: { product: ProductRow;
             <p>Valor líquido da venda: <strong>{formatCurrency(netValue)}</strong></p>
             <p>Custo fabricação itens: <strong>{formatCurrency(saleManufacturingCost)}</strong></p>
             <p>Custo fabricação brindes: <strong>{formatCurrency(giftManufacturingCost)}</strong></p>
+            <p>Custo pacote de envio: <strong>{formatCurrency(shippingPackageCost)}</strong></p>
             <p className="sm:col-span-2">Custo fabricação total: <strong>{formatCurrency(totalManufacturingCost)}</strong></p>
           </div>
 

@@ -7,6 +7,7 @@ const links = [
   { href: "/sales", label: "Vendas" },
   { href: "/expenses", label: "Gastos" },
   { href: "/stock", label: "Estoque" },
+  { href: "/shipping-packages", label: "Pacotes" },
 ];
 
 export async function Nav() {

@@ -8,6 +8,8 @@ export type TransactionRow = {
   grossValue?: string;
   discountValue?: string;
   platformFeeValue?: string;
+  shippingPackageId?: number | null;
+  shippingPackageUnitValue?: string;
   totalValue: string;
   platform?: string;
   date: string;
@@ -55,6 +57,14 @@ export type ProductComponentRow = {
   quantity: number;
   isKit: boolean;
   photoUrl: string;
+};
+
+export type ShippingPackageRow = {
+  id: number;
+  name: string;
+  quantity: number;
+  totalValue: string;
+  unitValue: string;
 };
 
 export const initialActionState: ActionState = {

@@ -112,6 +112,7 @@ O sistema usa estas tabelas principais:
 - `product_variations`: variações de produtos, como cor, peso ou outra característica.
 - `product_components`: composição dos kits cadastrados.
 - `sale_stock_movements`: baixas de estoque geradas por vendas feitas a partir do estoque.
+- `shipping_packages`: pacotes de envio cadastrados para compor o custo da venda.
 
 Campos principais das tabelas de vendas e gastos:
 
@@ -123,6 +124,8 @@ Campos principais das tabelas de vendas e gastos:
 - `grossValue` como `DECIMAL(10,2)`
 - `discountValue` como `DECIMAL(10,2)`
 - `platformFeeValue` como `DECIMAL(10,2)`
+- `shippingPackageId`
+- `shippingPackageUnitValue` como `DECIMAL(10,2)`
 - `totalValue` como `DECIMAL(10,2)`
 - `platform`
 - `date`
@@ -181,6 +184,14 @@ Campos principais da tabela `sale_stock_movements`:
 - `variationId`
 - `quantity`
 
+Campos principais da tabela `shipping_packages`:
+
+- `id`
+- `name`
+- `quantity`
+- `totalValue` como `DECIMAL(10,2)`
+- `unitValue` como `DECIMAL(10,2)`
+
 ## Funcionalidades
 
 - Dashboard com total de vendas, total de gastos e lucro.
@@ -188,6 +199,7 @@ Campos principais da tabela `sale_stock_movements`:
 - Listagem de vendas e gastos recentes no dashboard.
 - Cadastro, edição e exclusão de vendas.
 - Cadastro, edição e exclusão de gastos.
+- Cadastro, edição e exclusão de pacotes de envio, com cálculo automático de valor unitário a partir de quantidade e valor total.
 - Cadastro, edição, duplicação, exclusão e listagem de produtos em estoque com imagem anexada, valor de fabricação e valor de venda.
 - Filtro de produtos por nome ou SKU na tela de estoque.
 - Criação de kits compostos por produtos e/ou outros kits existentes.
@@ -205,8 +217,9 @@ Campos principais da tabela `sale_stock_movements`:
 - Sino de notificações para itens sem estoque, abaixo do mínimo e kits críticos, com navegação direta até o produto ou abertura do modal de variações com foco na variação afetada.
 - Lançamento de venda diretamente pelo estoque com quantidade vendida, desconto, valor final manual e plataforma.
 - Venda única com múltiplos produtos e/ou kits pelo modal `Vendido`.
+- Seleção de pacote de envio ao lançar venda pelo estoque ou pela tela de vendas.
 - Venda pelo estoque com brindes vindos de produtos/kits cadastrados, baixando estoque sem somar receita.
-- Exibição do custo de fabricação dos itens vendidos, dos brindes e do total no modal de venda.
+- Exibição do custo de fabricação dos itens vendidos, dos brindes, do pacote de envio e do total no modal de venda.
 - Ao excluir uma venda feita pelo estoque, os produtos e kits daquela venda voltam automaticamente ao estoque.
 - Cards de produto exibem apenas resumo das variações; os detalhes abrem em modal próprio.
 - Modais fecham ao clicar fora da área de conteúdo, mantendo o botão `Fechar` disponível.

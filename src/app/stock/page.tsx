@@ -4,16 +4,19 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function StockPage() {
-  const products = await prisma.product.findMany({
-    orderBy: { sku: "asc" },
-    include: {
-      variations: { orderBy: { name: "asc" } },
-      kitComponents: {
-        orderBy: { component: { sku: "asc" } },
-        include: { component: true, variation: true },
+  const [products, shippingPackages] = await Promise.all([
+    prisma.product.findMany({
+      orderBy: { sku: "asc" },
+      include: {
+        variations: { orderBy: { name: "asc" } },
+        kitComponents: {
+          orderBy: { component: { sku: "asc" } },
+          include: { component: true, variation: true },
+        },
       },
-    },
-  });
+    }),
+    prisma.shippingPackage.findMany({ orderBy: { name: "asc" } }),
+  ]);
 
   return (
     <StockManager
@@ -51,6 +54,13 @@ export default async function StockPage() {
           isKit: component.component.isKit,
           photoUrl: component.component.photoUrl,
         })),
+      }))}
+      shippingPackages={shippingPackages.map((shippingPackage) => ({
+        id: shippingPackage.id,
+        name: shippingPackage.name,
+        quantity: shippingPackage.quantity,
+        totalValue: shippingPackage.totalValue.toString(),
+        unitValue: shippingPackage.unitValue.toString(),
       }))}
     />
   );

@@ -103,6 +103,15 @@ export const transactionSchema = z.object({
     }),
 });
 
+export const shippingPackageSchema = z.object({
+  name: z.string().trim().min(1, "Informe o nome."),
+  quantity: z.coerce
+    .number({ error: "Informe a quantidade." })
+    .int("A quantidade deve ser um número inteiro.")
+    .positive("A quantidade deve ser maior que zero."),
+  totalValue: moneyText("o valor total"),
+});
+
 export const periodSchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
@@ -114,6 +123,7 @@ export type SellProductInput = z.infer<typeof sellProductSchema>;
 export type KitComponentInput = z.infer<typeof kitComponentSchema>;
 export type SaleItemInput = z.infer<typeof saleItemSchema>;
 export type ProductVariationInput = z.infer<typeof productVariationSchema>;
+export type ShippingPackageInput = z.infer<typeof shippingPackageSchema>;
 
 export function parseFormData(formData: FormData) {
   return transactionSchema.safeParse({
@@ -121,6 +131,30 @@ export function parseFormData(formData: FormData) {
     unitValue: formData.get("unitValue"),
     quantity: formData.get("quantity"),
     date: formData.get("date"),
+  });
+}
+
+export function parseShippingPackageId(formData: FormData) {
+  const value = formData.get("shippingPackageId");
+
+  if (value === null || value === "") {
+    return { success: true as const, data: null };
+  }
+
+  const parsed = z.coerce.number().int().positive().safeParse(value);
+
+  if (!parsed.success) {
+    return { success: false as const, message: "Pacote de envio inválido." };
+  }
+
+  return { success: true as const, data: parsed.data };
+}
+
+export function parseShippingPackageFormData(formData: FormData) {
+  return shippingPackageSchema.safeParse({
+    name: formData.get("name"),
+    quantity: formData.get("quantity"),
+    totalValue: formData.get("totalValue"),
   });
 }
 

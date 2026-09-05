@@ -3,18 +3,24 @@
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { parseFormData } from "@/lib/validation";
+import { parseFormData, parseShippingPackageId } from "@/lib/validation";
 import type { ActionState } from "@/types/transaction";
 
 export async function createSale(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = parseFormData(formData);
+  const parsedShippingPackageId = parseShippingPackageId(formData);
 
   if (!parsed.success) {
     return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
   }
 
+  if (!parsedShippingPackageId.success) {
+    return { ok: false, message: parsedShippingPackageId.message };
+  }
+
   try {
     const unitValue = new Prisma.Decimal(parsed.data.unitValue);
+    const shippingPackage = await findShippingPackage(parsedShippingPackageId.data);
 
     await prisma.sale.create({
       data: {
@@ -26,6 +32,8 @@ export async function createSale(_: ActionState, formData: FormData): Promise<Ac
         platformFeeValue: new Prisma.Decimal(0),
         totalValue: unitValue.mul(parsed.data.quantity),
         platform: "PERSONAL",
+        shippingPackageId: shippingPackage?.id,
+        shippingPackageUnitValue: shippingPackage?.unitValue ?? new Prisma.Decimal(0),
         date: new Date(`${parsed.data.date}T00:00:00.000Z`),
       },
     });
@@ -41,6 +49,7 @@ export async function createSale(_: ActionState, formData: FormData): Promise<Ac
 export async function updateSale(_: ActionState, formData: FormData): Promise<ActionState> {
   const id = Number(formData.get("id"));
   const parsed = parseFormData(formData);
+  const parsedShippingPackageId = parseShippingPackageId(formData);
 
   if (!Number.isInteger(id) || id <= 0) {
     return { ok: false, message: "Registro inválido." };
@@ -50,8 +59,13 @@ export async function updateSale(_: ActionState, formData: FormData): Promise<Ac
     return { ok: false, message: "Corrija os campos destacados.", errors: parsed.error.flatten().fieldErrors };
   }
 
+  if (!parsedShippingPackageId.success) {
+    return { ok: false, message: parsedShippingPackageId.message };
+  }
+
   try {
     const unitValue = new Prisma.Decimal(parsed.data.unitValue);
+    const shippingPackage = await findShippingPackage(parsedShippingPackageId.data);
 
     await prisma.sale.update({
       where: { id },
@@ -64,6 +78,8 @@ export async function updateSale(_: ActionState, formData: FormData): Promise<Ac
         platformFeeValue: new Prisma.Decimal(0),
         totalValue: unitValue.mul(parsed.data.quantity),
         platform: "PERSONAL",
+        shippingPackageId: shippingPackage?.id ?? null,
+        shippingPackageUnitValue: shippingPackage?.unitValue ?? new Prisma.Decimal(0),
         date: new Date(`${parsed.data.date}T00:00:00.000Z`),
       },
     });
@@ -74,6 +90,23 @@ export async function updateSale(_: ActionState, formData: FormData): Promise<Ac
   } catch {
     return { ok: false, message: "Não foi possível atualizar a venda." };
   }
+}
+
+async function findShippingPackage(id: number | null) {
+  if (!id) {
+    return null;
+  }
+
+  const shippingPackage = await prisma.shippingPackage.findUnique({
+    where: { id },
+    select: { id: true, unitValue: true },
+  });
+
+  if (!shippingPackage) {
+    throw new Error("Pacote de envio não encontrado.");
+  }
+
+  return shippingPackage;
 }
 
 export async function deleteSale(_: ActionState, formData: FormData): Promise<ActionState> {

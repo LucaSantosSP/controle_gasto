@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { formatCurrency, formatDate, toInputDate, toMoneyInput } from "@/lib/format";
-import { initialActionState, type ActionState, type TransactionRow } from "@/types/transaction";
+import { initialActionState, type ActionState, type ShippingPackageRow, type TransactionRow } from "@/types/transaction";
 
 type ServerAction = (state: ActionState, formData: FormData) => Promise<ActionState>;
 
@@ -15,6 +15,7 @@ type Props = {
   createAction: ServerAction;
   updateAction: ServerAction;
   deleteAction: ServerAction;
+  shippingPackages?: ShippingPackageRow[];
 };
 
 export function TransactionManager({
@@ -25,6 +26,7 @@ export function TransactionManager({
   createAction,
   updateAction,
   deleteAction,
+  shippingPackages = [],
 }: Props) {
   const [editing, setEditing] = useState<TransactionRow | null>(null);
 
@@ -52,6 +54,7 @@ export function TransactionManager({
         buttonLabel={editing ? "Salvar alterações" : newLabel}
         record={editing}
         onSaved={() => setEditing(null)}
+        shippingPackages={title === "Vendas" ? shippingPackages : []}
       />
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -66,6 +69,7 @@ export function TransactionManager({
                 <th className="px-5 py-3">Valor Unitário</th>
                 <th className="px-5 py-3">Quantidade</th>
                 {title === "Vendas" ? <th className="px-5 py-3">Plataforma</th> : null}
+                {title === "Vendas" ? <th className="px-5 py-3">Pacote</th> : null}
                 <th className="px-5 py-3">Valor Total</th>
                 <th className="px-5 py-3">Data</th>
                 <th className="px-5 py-3">Ações</th>
@@ -74,7 +78,7 @@ export function TransactionManager({
             <tbody className="divide-y divide-slate-100">
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={title === "Vendas" ? 7 : 6} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={title === "Vendas" ? 8 : 6} className="px-5 py-8 text-center text-slate-500">
                     {emptyLabel}
                   </td>
                 </tr>
@@ -85,6 +89,7 @@ export function TransactionManager({
                     <td className="px-5 py-4 text-slate-700">{formatCurrency(record.unitValue)}</td>
                     <td className="px-5 py-4 text-slate-700">{record.quantity}</td>
                     {title === "Vendas" ? <td className="px-5 py-4 text-slate-700">{formatPlatform(record.platform)}</td> : null}
+                    {title === "Vendas" ? <td className="px-5 py-4 text-slate-700">{formatCurrency(record.shippingPackageUnitValue ?? "0")}</td> : null}
                     <td className="px-5 py-4 font-semibold text-slate-950">{formatCurrency(record.totalValue)}</td>
                     <td className="px-5 py-4 text-slate-700">{formatDate(record.date)}</td>
                     <td className="px-5 py-4">
@@ -118,15 +123,20 @@ function TransactionForm({
   buttonLabel,
   record,
   onSaved,
+  shippingPackages,
 }: {
   action: ServerAction;
   buttonLabel: string;
   record: TransactionRow | null;
   onSaved: () => void;
+  shippingPackages: ShippingPackageRow[];
 }) {
   const [state, formAction, pending] = useActionState(action, initialActionState);
   const [unitValue, setUnitValue] = useState(record ? toMoneyInput(record.unitValue) : "");
   const [quantity, setQuantity] = useState(record?.quantity.toString() ?? "1");
+  const [shippingPackageId, setShippingPackageId] = useState(record?.shippingPackageId?.toString() ?? "");
+  const selectedShippingPackage = shippingPackages.find((shippingPackage) => shippingPackage.id === Number(shippingPackageId));
+  const shippingPackageCost = Number(selectedShippingPackage?.unitValue ?? record?.shippingPackageUnitValue ?? 0);
 
   const total = useMemo(() => {
     const normalizedUnit = Number(normalizeMoneyText(unitValue));
@@ -196,11 +206,31 @@ function TransactionForm({
               className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
             />
           </Field>
+          {shippingPackages.length > 0 ? (
+            <Field label="Pacote de envio">
+              <select
+                name="shippingPackageId"
+                value={shippingPackageId}
+                onChange={(event) => setShippingPackageId(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-950"
+              >
+                <option value="">Sem pacote</option>
+                {shippingPackages.map((shippingPackage) => (
+                  <option key={shippingPackage.id} value={shippingPackage.id}>
+                    {shippingPackage.name} | {formatCurrency(shippingPackage.unitValue)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="rounded-lg bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
-            Total: {formatCurrency(total)}
-          </p>
+          <div className="flex flex-wrap gap-2">
+            <p className="rounded-lg bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Total: {formatCurrency(total)}</p>
+            {shippingPackages.length > 0 ? (
+              <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Custo pacote: {formatCurrency(shippingPackageCost)}</p>
+            ) : null}
+          </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             {state.message ? (
               <p className={`text-sm font-medium ${state.ok ? "text-emerald-700" : "text-red-700"}`}>{state.message}</p>

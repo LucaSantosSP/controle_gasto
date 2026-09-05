@@ -5,7 +5,10 @@ import { createSale, deleteSale, updateSale } from "./actions";
 export const dynamic = "force-dynamic";
 
 export default async function SalesPage() {
-  const sales = await prisma.sale.findMany({ orderBy: [{ date: "desc" }, { id: "desc" }] });
+  const [sales, shippingPackages] = await Promise.all([
+    prisma.sale.findMany({ orderBy: [{ date: "desc" }, { id: "desc" }] }),
+    prisma.shippingPackage.findMany({ orderBy: { name: "asc" } }),
+  ]);
 
   return (
     <TransactionManager
@@ -20,6 +23,8 @@ export default async function SalesPage() {
         grossValue: sale.grossValue.toString(),
         discountValue: sale.discountValue.toString(),
         platformFeeValue: sale.platformFeeValue.toString(),
+        shippingPackageId: sale.shippingPackageId,
+        shippingPackageUnitValue: sale.shippingPackageUnitValue.toString(),
         totalValue: sale.totalValue.toString(),
         platform: sale.platform,
         date: sale.date.toISOString(),
@@ -27,6 +32,13 @@ export default async function SalesPage() {
       createAction={createSale}
       updateAction={updateSale}
       deleteAction={deleteSale}
+      shippingPackages={shippingPackages.map((shippingPackage) => ({
+        id: shippingPackage.id,
+        name: shippingPackage.name,
+        quantity: shippingPackage.quantity,
+        totalValue: shippingPackage.totalValue.toString(),
+        unitValue: shippingPackage.unitValue.toString(),
+      }))}
     />
   );
 }

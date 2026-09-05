@@ -30,12 +30,28 @@ model Sale {
   platformFeeValue Decimal  @default(0) @db.Decimal(10, 2)
   totalValue       Decimal  @db.Decimal(10, 2)
   platform         String   @default("PERSONAL") @db.VarChar(20)
+  shippingPackageId Int?
+  shippingPackageUnitValue Decimal @default(0) @db.Decimal(10, 2)
   date             DateTime @db.Date
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   stockMovements   SaleStockMovement[]
+  shippingPackage ShippingPackage? @relation(fields: [shippingPackageId], references: [id], onDelete: SetNull)
 
   @@map("sales")
+}
+
+model ShippingPackage {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(255)
+  quantity  Int
+  totalValue Decimal @db.Decimal(10, 2)
+  unitValue Decimal @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sales     Sale[]
+
+  @@map("shipping_packages")
 }
 
 model Product {
